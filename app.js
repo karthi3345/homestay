@@ -287,16 +287,70 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const waNumber = currentHomestay.whatsapp.replace(/[^+\d]/g, '');
       
-      whatsappBookBtn.onclick = () => {
-        // Read note at the time of click
+      whatsappBookBtn.onclick = async () => {
+        const guestNameEl = document.getElementById('guestName');
+        const guestPhoneEl = document.getElementById('guestPhone');
         const noteEl = document.getElementById('bookingNote');
-        const noteText = noteEl && noteEl.value.trim() ? `\n\nNote: ${noteEl.value.trim()}` : '';
         
-        // Formulate WhatsApp message text
-        const rawMsg = `Hi, I'd like to book your homestay: ${currentHomestay.name}.\n\nCheck-in: ${checkInStr}\nCheck-out: ${checkOutStr}\nGuests: ${adults} Adults, ${children} Children${noteText}`;
-        const encodedMsg = encodeURIComponent(rawMsg);
+        const guestName = guestNameEl ? guestNameEl.value.trim() : '';
+        const guestPhone = guestPhoneEl ? guestPhoneEl.value.trim() : '';
+        const noteText = noteEl ? noteEl.value.trim() : '';
+
+        if (!guestName || !guestPhone) {
+          alert('Please provide your Full Name and WhatsApp Number.');
+          return;
+        }
         
-        window.open(`https://wa.me/${waNumber}?text=${encodedMsg}`, '_blank');
+        whatsappBookBtn.disabled = true;
+        const originalText = whatsappBookBtn.querySelector('span').textContent;
+        whatsappBookBtn.querySelector('span').textContent = 'Sending...';
+
+        const requestPayload = {
+          homestayId: currentHomestay.id,
+          homestayName: currentHomestay.name,
+          checkIn: checkInStr,
+          checkOut: checkOutStr,
+          adults,
+          children,
+          guestName,
+          guestPhone,
+          note: noteText,
+          checkInMs: checkIn.getTime(),
+          checkOutMs: checkOut.getTime()
+        };
+
+        try {
+          const res = await fetch('/api/request-booking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestPayload)
+          });
+          
+          if (res.ok) {
+            whatsappBookBtn.querySelector('span').textContent = 'Request Sent!';
+            setTimeout(() => {
+              whatsappBookBtn.querySelector('span').textContent = originalText;
+              whatsappBookBtn.disabled = false;
+              // Reset form
+              if(guestNameEl) guestNameEl.value = '';
+              if(guestPhoneEl) guestPhoneEl.value = '';
+              if(noteEl) noteEl.value = '';
+              calendarInstance.checkIn = null;
+              calendarInstance.checkOut = null;
+              calendarInstance._drawGrid();
+              calendarInstance._notify();
+            }, 3000);
+          } else {
+            alert('Failed to send request. Please try again.');
+            whatsappBookBtn.disabled = false;
+            whatsappBookBtn.querySelector('span').textContent = originalText;
+          }
+        } catch (err) {
+          console.error(err);
+          alert('Error sending request.');
+          whatsappBookBtn.disabled = false;
+          whatsappBookBtn.querySelector('span').textContent = originalText;
+        }
       };
     } else {
       whatsappBookBtn.disabled = true;

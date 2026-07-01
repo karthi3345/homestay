@@ -16,12 +16,29 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BOOKINGS_FILE = path.join(__dirname, 'data', 'direct-bookings.json');
 const HOMESTAYS_FILE = path.join(__dirname, 'data', 'homestays.json');
+const PENDING_FILE = path.join(__dirname, 'data', 'pending-requests.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DIST_DIR = path.join(__dirname, 'dist');
 const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.use(express.json());
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Public API (No Auth)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/request-booking', (req, res) => {
+  const payload = req.body;
+  if (!fs.existsSync(PENDING_FILE)) fs.writeFileSync(PENDING_FILE, '[]');
+  const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  
+  payload.id = Date.now().toString(); // unique ID
+  payload.timestamp = new Date().toISOString();
+  
+  pending.push(payload);
+  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  res.json({ success: true, id: payload.id });
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PASSWORD PROTECTION (Basic Auth)
@@ -148,6 +165,60 @@ app.delete('/api/periods/:propertyId/:index', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  API: get, approve, decline pending requests
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/api/pending-requests', (req, res) => {
+  if (!fs.existsSync(PENDING_FILE)) return res.json([]);
+  res.json(JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8')));
+});
+
+app.post('/api/approve-request/:id', (req, res) => {
+  const id = req.params.id;
+  if (!fs.existsSync(PENDING_FILE)) return res.status(404).json({error: 'Not found'});
+  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  const reqObj = pending.find(r => r.id === id);
+  
+  if (!reqObj) return res.status(404).json({error: 'Request not found'});
+  
+  // Add to direct-bookings.json
+  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  let record = data.find(b => b.propertyId === reqObj.homestayId);
+  if (!record) {
+    record = { propertyId: reqObj.homestayId, blockedPeriods: [] };
+    data.push(record);
+  }
+  
+  const d1 = new Date(reqObj.checkInMs);
+  const d2 = new Date(reqObj.checkOutMs);
+  const fromStr = d1.toISOString().split('T')[0];
+  const toStr = d2.toISOString().split('T')[0];
+  
+  record.blockedPeriods.push({
+    from: fromStr,
+    to: toStr,
+    note: `[Approved] ${reqObj.guestName} (${reqObj.adults}A, ${reqObj.children}C) ${reqObj.note}`
+  });
+  
+  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
+  regenerateIcal();
+  
+  // Remove from pending
+  pending = pending.filter(r => r.id !== id);
+  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  
+  res.json({ success: true });
+});
+
+app.delete('/api/decline-request/:id', (req, res) => {
+  const id = req.params.id;
+  if (!fs.existsSync(PENDING_FILE)) return res.json({success: true});
+  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  pending = pending.filter(r => r.id !== id);
+  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  GET /admin → Serve the protected admin UI
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/admin', (req, res) => {
@@ -223,6 +294,27 @@ app.get('/admin', (req, res) => {
       margin-bottom: 24px;
     }
 
+    /* ── Pending Requests ── */
+    .request-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .request-card:hover { border-color: rgba(255,255,255,0.15); }
+    .request-header { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
+    .request-guest { font-weight: 600; font-size: 16px; color: var(--accent2); }
+    .request-prop { color: var(--muted); font-size: 13px; }
+    .request-dates { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+    .request-details { font-size: 13px; color: #a0a0a0; margin-bottom: 12px; }
+    .request-note { font-size: 13px; font-style: italic; color: #d0d0d0; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid var(--accent); }
+    .request-actions { display: flex; gap: 12px; }
+    .btn-approve { background: var(--success); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-decline { background: rgba(224,85,85,0.2); color: var(--danger); border: 1px solid var(--danger); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-whatsapp { background: #25d366; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; }
+
     /* ── Form ── */
     .form-row {
       display: grid;
@@ -253,107 +345,31 @@ app.get('/admin', (req, res) => {
       transition: border-color 0.2s;
       outline: none;
     }
-    input[type="date"]:focus, input[type="text"]:focus, select:focus {
-      border-color: var(--accent);
-    }
-    input[type="date"]::-webkit-calendar-picker-indicator {
-      filter: invert(0.6);
-      cursor: pointer;
-    }
+    input[type="date"]:focus, input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
     select option { background: #1e2028; }
 
     /* ── Button ── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 13px 28px;
-      border-radius: 10px;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s;
-    }
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-      width: 100%;
-      justify-content: center;
-      margin-top: 8px;
-    }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 28px; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: #000; width: 100%; justify-content: center; margin-top: 8px; }
     .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
-    .btn-primary:active { transform: translateY(0); }
 
     /* ── Toast ── */
-    #toast {
-      position: fixed;
-      bottom: 32px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 24px;
-      font-size: 14px;
-      opacity: 0;
-      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-      z-index: 999;
-      pointer-events: none;
-      white-space: nowrap;
-    }
+    #toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 24px; font-size: 14px; opacity: 0; transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 999; pointer-events: none; white-space: nowrap; }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     #toast.success { border-color: var(--success); color: var(--success); }
     #toast.error   { border-color: var(--danger);  color: var(--danger); }
 
     /* ── Periods List ── */
     .periods-list { display: flex; flex-direction: column; gap: 10px; }
-    .period-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 18px;
-      transition: border-color 0.2s;
-    }
+    .period-row { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; transition: border-color 0.2s; }
     .period-row:hover { border-color: rgba(255,255,255,0.15); }
     .period-dates { font-size: 15px; font-weight: 500; }
     .period-duration { font-size: 13px; color: var(--muted); margin-top: 3px; }
     .period-note { font-size: 12px; color: var(--accent); margin-top: 2px; }
-    .btn-delete {
-      background: transparent;
-      border: 1px solid rgba(224,85,85,0.3);
-      color: var(--danger);
-      border-radius: 8px;
-      padding: 7px 14px;
-      font-size: 13px;
-      cursor: pointer;
-      font-family: 'Inter', sans-serif;
-      transition: all 0.2s;
-    }
+    .btn-delete { background: transparent; border: 1px solid rgba(224,85,85,0.3); color: var(--danger); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; }
     .btn-delete:hover { background: rgba(224,85,85,0.1); border-color: var(--danger); }
-
-    .empty-state {
-      text-align: center;
-      padding: 32px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    /* ── Info box ── */
-    .info-box {
-      background: rgba(214,175,55,0.06);
-      border: 1px solid rgba(214,175,55,0.2);
-      border-radius: 10px;
-      padding: 14px 18px;
-      font-size: 13px;
-      color: #c8a830;
-      line-height: 1.7;
-    }
-    .info-box strong { display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+    .empty-state { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
   </style>
 </head>
 <body>
@@ -365,6 +381,14 @@ app.get('/admin', (req, res) => {
 </header>
 
 <div class="container">
+  
+  <!-- PENDING REQUESTS -->
+  <div class="card" style="border-top: 2px solid var(--accent);">
+    <div class="card-title">Pending Booking Requests</div>
+    <div id="pendingList">
+      <div class="empty-state">Loading requests...</div>
+    </div>
+  </div>
 
   <!-- Property selector -->
   <div class="card">
@@ -381,7 +405,7 @@ app.get('/admin', (req, res) => {
 
   <!-- Block new dates -->
   <div class="card">
-    <div class="card-title">Block New Dates</div>
+    <div class="card-title">Manual Block Dates</div>
     <div class="form-row">
       <div>
         <label>Check-in Date</label>
@@ -411,30 +435,11 @@ app.get('/admin', (req, res) => {
     </div>
   </div>
 
-  <!-- iCal info -->
-  <div class="info-box">
-    <strong>Your iCal URL (share with Airbnb, Booking.com, Vrbo)</strong>
-    Every time you block or unblock dates here, the iCal file updates automatically.<br>
-    Your iCal URL is:<br><br>
-    <code id="icalUrl" style="font-size:13px; color:#f0cc60;">https://${req.get('host')}/<span id="icalSlug">volgo-alpine-retreat</span>.ics</code>
-  </div>
-
 </div>
 
 <div id="toast"></div>
 
 <script>
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('fromDate').min = today;
-  document.getElementById('toDate').min   = today;
-
-  document.getElementById('fromDate').addEventListener('change', function() {
-    document.getElementById('toDate').min = this.value;
-    if (document.getElementById('toDate').value <= this.value) {
-      document.getElementById('toDate').value = '';
-    }
-  });
-
   function showToast(msg, type = 'success') {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -454,16 +459,59 @@ app.get('/admin', (req, res) => {
     });
   }
 
-  function getPropertyId() {
-    return document.getElementById('propertySelect').value;
+  function getPropertyId() { return document.getElementById('propertySelect').value; }
+
+  async function loadPendingRequests() {
+    const res = await fetch('/api/pending-requests');
+    const requests = await res.json();
+    const list = document.getElementById('pendingList');
+    
+    if (!requests.length) {
+      list.innerHTML = '<div class="empty-state">No pending requests right now.</div>';
+      return;
+    }
+    
+    list.innerHTML = requests.map(r => {
+      const wNumber = r.guestPhone.replace(/[^+\\d]/g, '');
+      const d1 = new Date(r.checkInMs).toLocaleDateString();
+      const d2 = new Date(r.checkOutMs).toLocaleDateString();
+      
+      return \`
+        <div class="request-card">
+          <div class="request-header">
+            <span class="request-guest">\${r.guestName}</span>
+            <span class="request-prop">\${r.homestayName}</span>
+          </div>
+          <div class="request-dates">\${d1} → \${d2}</div>
+          <div class="request-details">\${r.adults} Adults, \${r.children} Children | Phone: \${r.guestPhone}</div>
+          \${r.note ? \`<div class="request-note">"\${r.note}"</div>\` : ''}
+          <div class="request-actions">
+            <button class="btn-approve" onclick="approveRequest('\${r.id}')">Approve</button>
+            <button class="btn-decline" onclick="declineRequest('\${r.id}')">Decline</button>
+            <a class="btn-whatsapp" href="https://wa.me/\${wNumber}?text=Hi \${r.guestName}, regarding your booking..." target="_blank">Message</a>
+          </div>
+        </div>
+      \`;
+    }).join('');
+  }
+  
+  async function approveRequest(id) {
+    if (!confirm('Approve?')) return;
+    const res = await fetch('/api/approve-request/' + id, { method: 'POST' });
+    if (res.ok) { showToast('Approved!'); loadPendingRequests(); loadPeriods(); }
+  }
+  
+  async function declineRequest(id) {
+    if (!confirm('Decline?')) return;
+    const res = await fetch('/api/decline-request/' + id, { method: 'DELETE' });
+    if (res.ok) { showToast('Declined'); loadPendingRequests(); }
   }
 
   async function loadPeriods() {
     const pid = getPropertyId();
-    document.getElementById('icalSlug').textContent = pid;
-    const res     = await fetch('/api/periods/' + pid);
+    const res = await fetch('/api/periods/' + pid);
     const periods = await res.json();
-    const list    = document.getElementById('periodsList');
+    const list = document.getElementById('periodsList');
 
     if (!periods.length) {
       list.innerHTML = '<div class="empty-state">No dates blocked yet.</div>';
@@ -484,38 +532,34 @@ app.get('/admin', (req, res) => {
 
   async function addPeriod() {
     const from = document.getElementById('fromDate').value;
-    const to   = document.getElementById('toDate').value;
-    const note = document.getElementById('noteInput').value.trim();
-
-    if (!from || !to) return showToast('Please select both check-in and check-out dates.', 'error');
-    if (from >= to)   return showToast('Check-out must be after check-in.', 'error');
-
-    const res  = await fetch('/api/periods/' + getPropertyId(), {
-      method:  'POST',
+    const to = document.getElementById('toDate').value;
+    const note = document.getElementById('noteInput').value;
+    if (!from || !to) return showToast('Please select dates', 'error');
+    const res = await fetch('/api/periods/' + getPropertyId(), {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ from, to, note })
+      body: JSON.stringify({ from, to, note })
     });
-    const data = await res.json();
-
-    if (!res.ok) return showToast(data.error || 'Failed to block dates.', 'error');
-
-    document.getElementById('fromDate').value = '';
-    document.getElementById('toDate').value   = '';
-    document.getElementById('noteInput').value = '';
-    showToast('✓ Dates blocked and iCal updated!', 'success');
-    loadPeriods();
+    if (res.ok) {
+      showToast('Dates blocked');
+      document.getElementById('fromDate').value = '';
+      document.getElementById('toDate').value = '';
+      document.getElementById('noteInput').value = '';
+      loadPeriods();
+    }
   }
 
   async function removePeriod(index) {
     if (!confirm('Remove this blocked period?')) return;
     const res  = await fetch('/api/periods/' + getPropertyId() + '/' + index, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) return showToast(data.error, 'error');
-    showToast('✓ Dates unblocked and iCal updated!', 'success');
-    loadPeriods();
+    if (res.ok) {
+      showToast('Dates unblocked');
+      loadPeriods();
+    }
   }
 
   loadPeriods();
+  loadPendingRequests();
 </script>
 </body>
 </html>`);
@@ -524,13 +568,9 @@ app.get('/admin', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public Website Serving
 // ─────────────────────────────────────────────────────────────────────────────
-// In production, the public website is built by Vite into the /dist folder.
-// For development convenience, we also serve from /public and /
 app.use(express.static(DIST_DIR));
 app.use(express.static(PUBLIC_DIR));
 
-// Crucial: The frontend fetches JSON from /data and loads images from /assets
-// We must explicitly serve these folders since Vite doesn't bundle them into /dist by default
 const DATA_DIR = path.join(__dirname, 'data');
 const ASSETS_DIR = path.join(__dirname, 'assets');
 app.use('/data', express.static(DATA_DIR));
