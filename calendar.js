@@ -25,7 +25,8 @@ class HomestayCalendar {
     this.checkIn   = null; // Date object
     this.checkOut  = null; // Date object
     this.hoverDate = null; // Date object (for range preview)
-    this.guests    = 2;
+    this.adults    = 2;
+    this.children  = 0;
     this.maxGuests = options.maxGuests || 6;
 
     this._build();
@@ -40,7 +41,12 @@ class HomestayCalendar {
 
   setMaxGuests(max) {
     this.maxGuests = max;
-    this.guests = Math.min(this.guests, max);
+    if (this.adults + this.children > max) {
+      this.children = Math.max(0, max - this.adults);
+      if (this.adults + this.children > max) {
+        this.adults = max;
+      }
+    }
     this._drawGuests();
   }
 
@@ -175,13 +181,22 @@ class HomestayCalendar {
 
   _drawGuests() {
     const el = this.container.querySelector('.guest-selector-container');
+    const total = this.adults + this.children;
     el.innerHTML = `
       <div class="guest-selector">
-        <span class="guest-label">Guests</span>
+        <span class="guest-label">Adults</span>
         <div class="guest-controls">
-          <button type="button" class="btn-guest-dec"${this.guests <= 1 ? ' disabled' : ''}>−</button>
-          <span class="guest-count">${this.guests}</span>
-          <button type="button" class="btn-guest-inc"${this.guests >= this.maxGuests ? ' disabled' : ''}>+</button>
+          <button type="button" class="btn-adult-dec"${this.adults <= 1 ? ' disabled' : ''}>−</button>
+          <span class="guest-count">${this.adults}</span>
+          <button type="button" class="btn-adult-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
+        </div>
+      </div>
+      <div class="guest-selector">
+        <span class="guest-label">Children</span>
+        <div class="guest-controls">
+          <button type="button" class="btn-child-dec"${this.children <= 0 ? ' disabled' : ''}>−</button>
+          <span class="guest-count">${this.children}</span>
+          <button type="button" class="btn-child-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
         </div>
       </div>
     `;
@@ -266,12 +281,22 @@ class HomestayCalendar {
 
     // Guest controls (event delegation on container)
     this.container.addEventListener('click', (e) => {
-      if (e.target.classList.contains('btn-guest-inc') && this.guests < this.maxGuests) {
-        this.guests++;
+      const total = this.adults + this.children;
+
+      if (e.target.classList.contains('btn-adult-inc') && total < this.maxGuests) {
+        this.adults++;
         this._drawGuests();
         this._notify();
-      } else if (e.target.classList.contains('btn-guest-dec') && this.guests > 1) {
-        this.guests--;
+      } else if (e.target.classList.contains('btn-adult-dec') && this.adults > 1) {
+        this.adults--;
+        this._drawGuests();
+        this._notify();
+      } else if (e.target.classList.contains('btn-child-inc') && total < this.maxGuests) {
+        this.children++;
+        this._drawGuests();
+        this._notify();
+      } else if (e.target.classList.contains('btn-child-dec') && this.children > 0) {
+        this.children--;
         this._drawGuests();
         this._notify();
       }
@@ -326,7 +351,8 @@ class HomestayCalendar {
     this.onSelectionChange({
       checkIn:  this.checkIn,
       checkOut: this.checkOut,
-      guests:   this.guests
+      adults:   this.adults,
+      children: this.children
     });
   }
 }

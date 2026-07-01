@@ -711,6 +711,12 @@ body {
 }
 
 /* Guest Selector */
+.guest-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .guest-selector {
   display: flex;
   justify-content: space-between;
@@ -784,6 +790,38 @@ body {
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
+}
+
+/* Booking Note */
+.booking-note-container {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.booking-note-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.booking-note-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  resize: vertical;
+  min-height: 60px;
+  max-height: 120px;
+  transition: var(--transition-fast);
+  outline: none;
+}
+.booking-note-input:focus {
+  border-color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .booking-notice {

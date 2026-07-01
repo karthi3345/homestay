@@ -3,6 +3,20 @@
     "id": "volgo-alpine-retreat",
     "name": "Volgo Alpine Retreat",
     "tagline": "A premium sanctuary nestled in pristine nature.",
+    "icalUrls": [
+      {
+        "label": "Airbnb",
+        "url": "PASTE_YOUR_AIRBNB_ICAL_URL_HERE"
+      },
+      {
+        "label": "Booking.com",
+        "url": "PASTE_YOUR_BOOKING_COM_ICAL_URL_HERE"
+      },
+      {
+        "label": "Vrbo",
+        "url": "PASTE_YOUR_VRBO_ICAL_URL_HERE"
+      }
+    ],
     "description": "Experience an exquisite blend of architecture and wilderness. Our boutique alpine retreat offers panoramic floor-to-ceiling mountain views, handcrafted wood interiors, and premium custom furnishings designed to elevate your stay. Reconnect with nature in absolute comfort.",
     "capacity": 6,
     "bedrooms": 3,

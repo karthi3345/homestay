@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Handle Date Selection from calendar
   function handleDateSelection(selection) {
-    const { checkIn, checkOut, guests } = selection;
+    const { checkIn, checkOut, adults, children } = selection;
     
     if (checkIn && checkOut) {
       whatsappBookBtn.disabled = false;
@@ -285,12 +285,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const checkInStr = checkIn.toLocaleDateString('en-US', options);
       const checkOutStr = checkOut.toLocaleDateString('en-US', options);
       
-      // Formulate WhatsApp message text
-      const rawMsg = `Hi, I'd like to book your homestay: ${currentHomestay.name}.\n\nCheck-in: ${checkInStr}\nCheck-out: ${checkOutStr}\nGuests: ${guests}`;
-      const encodedMsg = encodeURIComponent(rawMsg);
       const waNumber = currentHomestay.whatsapp.replace(/[^+\d]/g, '');
       
       whatsappBookBtn.onclick = () => {
+        // Read note at the time of click
+        const noteEl = document.getElementById('bookingNote');
+        const noteText = noteEl && noteEl.value.trim() ? `\n\nNote: ${noteEl.value.trim()}` : '';
+        
+        // Formulate WhatsApp message text
+        const rawMsg = `Hi, I'd like to book your homestay: ${currentHomestay.name}.\n\nCheck-in: ${checkInStr}\nCheck-out: ${checkOutStr}\nGuests: ${adults} Adults, ${children} Children${noteText}`;
+        const encodedMsg = encodeURIComponent(rawMsg);
+        
         window.open(`https://wa.me/${waNumber}?text=${encodedMsg}`, '_blank');
       };
     } else {

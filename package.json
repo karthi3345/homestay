@@ -6,9 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync": "node sync-calendar.js",
+    "generate-ical": "node generate-ical.js",
+    "update": "node sync-calendar.js && node generate-ical.js",
+    "start": "node server.js"
   },
   "devDependencies": {
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2",
+    "node-ical": "^0.26.1",
     "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "express-basic-auth": "^1.2.1"
   }
 }
