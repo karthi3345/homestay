@@ -633,17 +633,32 @@ body {
   color: var(--color-accent);
 }
 
+/* cap-blocked: dates beyond a booked gap after check-in.
+   Still clickable (resets check-in), just visually dimmed. */
+.calendar-day.cap-blocked {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  opacity: 0.4;
+}
+
+.calendar-day.cap-blocked:hover {
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 /* Range Highlights */
 .calendar-day.selected-start {
   background: var(--color-accent) !important;
   color: #000 !important;
   font-weight: 600;
+  border-radius: 50%;
 }
 
 .calendar-day.selected-end {
   background: var(--color-accent) !important;
   color: #000 !important;
   font-weight: 600;
+  border-radius: 50%;
 }
 
 .calendar-day.in-range {
