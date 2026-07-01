@@ -16,8 +16,11 @@ class HomestayCalendar {
 
     // Show current month
     const now = new Date();
-    this.viewYear  = now.getFullYear();
-    this.viewMonth = now.getMonth();
+    this.viewYear   = now.getFullYear();
+    this.viewMonth  = now.getMonth();
+    // Lock: cannot navigate before this month
+    this.minYear    = now.getFullYear();
+    this.minMonth   = now.getMonth();
 
     this.checkIn   = null; // Date object
     this.checkOut  = null; // Date object
@@ -93,6 +96,14 @@ class HomestayCalendar {
 
     label.textContent = `${MONTHS[this.viewMonth]} ${this.viewYear}`;
     grid.innerHTML = '';
+
+    // Disable prev button when on current month
+    if (this._btnPrev) {
+      const atMin = this.viewYear === this.minYear && this.viewMonth === this.minMonth;
+      this._btnPrev.disabled = atMin;
+      this._btnPrev.style.opacity = atMin ? '0.25' : '1';
+      this._btnPrev.style.cursor  = atMin ? 'not-allowed' : 'pointer';
+    }
 
     const today   = this._midnight(new Date());
     const firstWd = new Date(this.viewYear, this.viewMonth, 1).getDay();
@@ -187,13 +198,18 @@ class HomestayCalendar {
 
   _attachEvents() {
     // Month navigation
-    this.container.querySelector('.btn-cal-prev').addEventListener('click', () => {
+    this._btnPrev = this.container.querySelector('.btn-cal-prev');
+    this._btnNext = this.container.querySelector('.btn-cal-next');
+
+    this._btnPrev.addEventListener('click', () => {
+      // Don't go before the current real-world month
+      if (this.viewYear === this.minYear && this.viewMonth === this.minMonth) return;
       if (this.viewMonth === 0) { this.viewMonth = 11; this.viewYear--; }
       else this.viewMonth--;
       this._drawGrid();
     });
 
-    this.container.querySelector('.btn-cal-next').addEventListener('click', () => {
+    this._btnNext.addEventListener('click', () => {
       if (this.viewMonth === 11) { this.viewMonth = 0; this.viewYear++; }
       else this.viewMonth++;
       this._drawGrid();

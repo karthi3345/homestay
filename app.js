@@ -203,8 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (!images || images.length === 0) return;
     
-    // Load first 5 images for slideshow to prevent heavy Dom overhead
-    const slides = images.slice(0, 6);
+    // Use up to 8 images for the hero slideshow
+    const slides = images.slice(0, 8);
     
     slides.forEach((url, idx) => {
       const slide = document.createElement('div');
@@ -213,46 +213,63 @@ document.addEventListener('DOMContentLoaded', () => {
       if (idx === 0) slide.classList.add('active');
       slideshowBg.appendChild(slide);
       
-      const indicator = document.createElement('button');
-      indicator.classList.add('slide-dot');
-      if (idx === 0) indicator.classList.add('active');
-      indicator.ariaLabel = `Go to slide ${idx + 1}`;
-      indicator.addEventListener('click', () => {
-        setSlide(idx);
-      });
-      slideshowIndicators.appendChild(indicator);
+      const dot = document.createElement('button');
+      dot.classList.add('slide-dot');
+      if (idx === 0) dot.classList.add('active');
+      dot.ariaLabel = `Go to slide ${idx + 1}`;
+      dot.addEventListener('click', () => setSlide(idx));
+      slideshowIndicators.appendChild(dot);
     });
     
     currentSlideIndex = 0;
-    
-    slideshowInterval = setInterval(() => {
-      nextSlide(slides.length);
-    }, 6000); // 6 seconds slide duration
+    startSlideshowTimer(slides.length);
+  }
+
+  function startSlideshowTimer(total) {
+    if (slideshowInterval) clearInterval(slideshowInterval);
+    slideshowInterval = setInterval(() => nextSlide(total), 7000); // 7s per slide
   }
 
   function setSlide(index) {
-    const slides = slideshowBg.querySelectorAll('.slide-img');
-    const dots = slideshowIndicators.querySelectorAll('.slide-dot');
-    
-    slides.forEach(s => s.classList.remove('active'));
-    dots.forEach(d => d.classList.remove('active'));
-    
+    const slides = Array.from(slideshowBg.querySelectorAll('.slide-img'));
+    const dots   = Array.from(slideshowIndicators.querySelectorAll('.slide-dot'));
+
+    if (index === currentSlideIndex) return;
+
+    const outgoing = slides[currentSlideIndex];
+    const incoming  = slides[index];
+
+    // ── KEY FIX ────────────────────────────────────────────────────────────
+    // Before removing .active (which stops the CSS animation), snapshot the
+    // slide's current computed transform and pin it as an inline style.
+    // Without this, removing .active causes the element to snap back to its
+    // non-animated default transform — producing the visible jerk.
+    const frozenTransform = window.getComputedStyle(outgoing).transform;
+    outgoing.style.transform = frozenTransform;   // pin current position
+    // ────────────────────────────────────────────────────────────────────────
+
+    outgoing.classList.remove('active');
+    outgoing.classList.add('leaving');
+
+    // Incoming: clear any previously frozen transform so its animation starts fresh
+    incoming.style.transform = '';
+    incoming.classList.add('active');
+
+    // After fade-out completes, strip leaving and frozen transform
+    setTimeout(() => {
+      outgoing.classList.remove('leaving');
+      outgoing.style.transform = '';
+    }, 1700);
+
+    dots[currentSlideIndex].classList.remove('active');
+    dots[index].classList.add('active');
+
     currentSlideIndex = index;
-    slides[currentSlideIndex].classList.add('active');
-    dots[currentSlideIndex].classList.add('active');
-    
-    // Reset automated interval to prevent quick skipping
-    if (slideshowInterval) {
-      clearInterval(slideshowInterval);
-      slideshowInterval = setInterval(() => {
-        nextSlide(slides.length);
-      }, 6000);
-    }
+    startSlideshowTimer(slides.length);
   }
 
   function nextSlide(total) {
-    let nextIndex = (currentSlideIndex + 1) % total;
-    setSlide(nextIndex);
+    setSlide((currentSlideIndex + 1) % total);
   }
 
   // Handle Date Selection from calendar

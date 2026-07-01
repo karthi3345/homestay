@@ -49,45 +49,50 @@ body {
   height: 100%;
   z-index: 1;
   overflow: hidden;
+  border-radius: inherit;
 }
 
+/* Every slide fills the container, starts invisible */
 .hero-pane .slide-img {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background-size: cover;
   background-position: center;
   opacity: 0;
-  z-index: 1;
-  transition: opacity 1.8s ease-in-out;
-  transform: scale(1.08);
+  /* Long fade out only — fade-in handled by .active */
+  transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity, transform;
+  transform: scale(1.05);
 }
 
+/* Outgoing slide: fade out while still keeping its zoom going */
+.hero-pane .slide-img.leaving {
+  opacity: 0;
+  transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Active (incoming) slide: fade in with slow zoom */
 .hero-pane .slide-img.active {
   opacity: 1;
   z-index: 2;
-  animation: kenburns 36s infinite alternate ease-in-out;
+  animation: slideZoom 9s linear forwards;
 }
 
-@keyframes kenburns {
-  0% {
-    transform: scale(1) translate(0px, 0px);
-  }
-  100% {
-    transform: scale(1.1) translate(-20px, -10px);
-  }
+@keyframes slideZoom {
+  0%   { transform: scale(1.05); }
+  100% { transform: scale(1.12); }
 }
 
 .hero-pane .scrim-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  background: linear-gradient(180deg, rgba(13, 14, 17, 0.3) 0%, rgba(13, 14, 17, 0.85) 100%);
+  inset: 0;
+  z-index: 3;
+  background: linear-gradient(
+    170deg,
+    rgba(13, 14, 17, 0.15) 0%,
+    rgba(13, 14, 17, 0.5)  55%,
+    rgba(13, 14, 17, 0.88) 100%
+  );
 }
 
 /* Master Layout */
