@@ -702,6 +702,20 @@ app.get('/admin', (req, res) => {
     .btn-delete { background: transparent; border: 1px solid rgba(224,85,85,0.3); color: var(--danger); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; }
     .btn-delete:hover { background: rgba(224,85,85,0.1); border-color: var(--danger); }
     .empty-state { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+    
+    /* ── Mobile Responsive ── */
+    @media (max-width: 768px) {
+      header { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 10px; }
+      .logo-divider { display: none; }
+      .form-row { grid-template-columns: 1fr; }
+      .period-row { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .btn-delete { width: 100%; text-align: center; justify-content: center; }
+      .request-header { flex-direction: column; gap: 6px; }
+      .request-actions { flex-direction: column; }
+      .request-actions > * { width: 100%; text-align: center; justify-content: center; }
+      .split-card { flex-direction: column; gap: 24px !important; }
+      .split-card > div { width: 100% !important; }
+    }
   </style>
 </head>
 <body>
@@ -786,7 +800,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <!-- Current Blocking -->
-  <div class="card" style="display:flex; gap: 40px; align-items:flex-start;">
+  <div class="card split-card" style="display:flex; gap: 40px; align-items:flex-start;">
     <div style="flex: 1;">
       <h2 class="card-title">Currently Blocked Periods</h2>
       <div id="periodsList">
