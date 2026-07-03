@@ -195,15 +195,22 @@ app.get('/api/periods/:propertyId', (req, res) => {
   if (!record) return res.json([]);
 
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
+  cutoff.setDate(cutoff.getDate() - 3); // 3 days ago
   const cutoffMs = cutoff.getTime();
 
-  // Hide periods that ended more than 7 days ago (they stay in the JSON file safely)
-  const filtered = record.blockedPeriods.filter(p => {
+  // Permanently remove bookings that ended more than 3 days ago
+  const originalLength = record.blockedPeriods.length;
+  record.blockedPeriods = record.blockedPeriods.filter(p => {
     return new Date(p.to).getTime() >= cutoffMs;
   });
 
-  res.json(filtered);
+  // If any were removed, save the file
+  if (record.blockedPeriods.length !== originalLength) {
+    fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    regenerateIcal();
+  }
+
+  res.json(record.blockedPeriods);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -902,16 +909,22 @@ app.get('/admin', (req, res) => {
       return;
     }
 
-    list.innerHTML = periods.map((p, i) => \`
-        <div class="period-row">
+    list.innerHTML = periods.map((p, i) => {
+      const isFinished = new Date(p.to).getTime() < Date.now();
+      const finishedStyle = isFinished ? 'opacity: 0.4; filter: grayscale(1);' : '';
+      const finishedBadge = isFinished ? '<span style="font-size:11px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius:4px; margin-left: 8px;">Completed</span>' : '';
+      
+      return \`
+        <div class="period-row" style="\${finishedStyle}">
           <div>
-            <div class="period-dates">\${fmtDate(p.from)} &nbsp;→&nbsp; \${fmtDate(p.to)}</div>
+            <div class="period-dates">\${fmtDate(p.from)} &nbsp;→&nbsp; \${fmtDate(p.to)} \${finishedBadge}</div>
             <div class="period-duration">\${nights(p.from, p.to)}</div>
             \${p.note ? \`<div class="period-note">\${p.note}</div>\` : ''}
           </div>
           \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${i})">Remove</button>\`}
         </div>
-      \`).join('');
+      \`;
+    }).join('');
 
     // Update Visual Calendar
     const blockedDates = [];
