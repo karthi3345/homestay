@@ -16,9 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const heroTagline = document.getElementById('heroTagline');
   const heroCta = document.getElementById('heroCta');
   
-  const slideshowBg = document.getElementById('slideshow-bg');
-  const slideshowIndicators = document.getElementById('slideshowIndicators');
-  
   // Tab elements
   const tabs = document.querySelectorAll('.nav-tab');
   const tabPanes = document.querySelectorAll('.tab-pane');
@@ -48,6 +45,57 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Booking Action
   const whatsappBookBtn = document.getElementById('whatsappBookBtn');
+
+  // --- Vanilla BorderGlow Port ---
+  function initBorderGlow() {
+    const card = document.getElementById('overviewCard');
+    if (!card) return;
+
+    function getCenterOfElement(el) {
+      const rect = el.getBoundingClientRect();
+      return [rect.width / 2, rect.height / 2];
+    }
+
+    function getEdgeProximity(el, x, y) {
+      const [cx, cy] = getCenterOfElement(el);
+      const dx = x - cx;
+      const dy = y - cy;
+      let kx = Infinity;
+      let ky = Infinity;
+      if (dx !== 0) kx = cx / Math.abs(dx);
+      if (dy !== 0) ky = cy / Math.abs(dy);
+      return Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+    }
+
+    function getCursorAngle(el, x, y) {
+      const [cx, cy] = getCenterOfElement(el);
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx === 0 && dy === 0) return 0;
+      const radians = Math.atan2(dy, dx);
+      let degrees = radians * (180 / Math.PI) + 90;
+      if (degrees < 0) degrees += 360;
+      return degrees;
+    }
+
+    card.addEventListener('pointermove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const edge = getEdgeProximity(card, x, y);
+      const angle = getCursorAngle(card, x, y);
+
+      card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`);
+      card.style.setProperty('--cursor-angle', `${angle.toFixed(3)}deg`);
+    });
+    
+    // Trigger initial state
+    card.style.setProperty('--edge-proximity', '0');
+    card.style.setProperty('--cursor-angle', '45deg');
+  }
+  
+  initBorderGlow();
 
   // Fetch homestay configuration
   fetch('data/homestays.json')
@@ -219,89 +267,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     
-    // Slideshow Background Setup
-    initBackgroundSlideshow(homestay.images);
+    // Initialize Full Canvas Background
+    if (!document.getElementById('app-background').style.backgroundImage) {
+      initFullCanvasBackground();
+    }
     
     // Reset selection
     whatsappBookBtn.disabled = true;
     whatsappBookBtn.classList.remove('active');
   }
 
-  // Slideshow Logic
-  function initBackgroundSlideshow(images) {
-    if (slideshowInterval) clearInterval(slideshowInterval);
-    slideshowBg.innerHTML = '';
-    slideshowIndicators.innerHTML = '';
-    
-    if (!images || images.length === 0) return;
-    
-    // Use up to 8 images for the hero slideshow
-    const slides = images.slice(0, 8);
-    
-    slides.forEach((url, idx) => {
-      const slide = document.createElement('div');
-      slide.classList.add('slide-img');
-      slide.style.backgroundImage = `url('${url}')`;
-      if (idx === 0) slide.classList.add('active');
-      slideshowBg.appendChild(slide);
-      
-      const dot = document.createElement('button');
-      dot.classList.add('slide-dot');
-      if (idx === 0) dot.classList.add('active');
-      dot.ariaLabel = `Go to slide ${idx + 1}`;
-      dot.addEventListener('click', () => setSlide(idx));
-      slideshowIndicators.appendChild(dot);
-    });
-    
-    currentSlideIndex = 0;
-    startSlideshowTimer(slides.length);
-  }
-
-  function startSlideshowTimer(total) {
-    if (slideshowInterval) clearInterval(slideshowInterval);
-    slideshowInterval = setInterval(() => nextSlide(total), 7000); // 7s per slide
-  }
-
-  function setSlide(index) {
-    const slides = Array.from(slideshowBg.querySelectorAll('.slide-img'));
-    const dots   = Array.from(slideshowIndicators.querySelectorAll('.slide-dot'));
-
-    if (index === currentSlideIndex) return;
-
-    const outgoing = slides[currentSlideIndex];
-    const incoming  = slides[index];
-
-    // ── KEY FIX ────────────────────────────────────────────────────────────
-    // Before removing .active (which stops the CSS animation), snapshot the
-    // slide's current computed transform and pin it as an inline style.
-    // Without this, removing .active causes the element to snap back to its
-    // non-animated default transform — producing the visible jerk.
-    const frozenTransform = window.getComputedStyle(outgoing).transform;
-    outgoing.style.transform = frozenTransform;   // pin current position
-    // ────────────────────────────────────────────────────────────────────────
-
-    outgoing.classList.remove('active');
-    outgoing.classList.add('leaving');
-
-    // Incoming: clear any previously frozen transform so its animation starts fresh
-    incoming.style.transform = '';
-    incoming.classList.add('active');
-
-    // After fade-out completes, strip leaving and frozen transform
-    setTimeout(() => {
-      outgoing.classList.remove('leaving');
-      outgoing.style.transform = '';
-    }, 1700);
-
-    dots[currentSlideIndex].classList.remove('active');
-    dots[index].classList.add('active');
-
-    currentSlideIndex = index;
-    startSlideshowTimer(slides.length);
-  }
-
-  function nextSlide(total) {
-    setSlide((currentSlideIndex + 1) % total);
+  // Full Canvas Random Background Setup
+  function initFullCanvasBackground() {
+    const bgContainer = document.getElementById('app-background');
+    if (!bgContainer) return;
+    const totalImages = 5;
+    const randomIdx = Math.floor(Math.random() * totalImages) + 1;
+    bgContainer.style.backgroundImage = `url('assets/bg-optimized/bg-${randomIdx}.png')`;
   }
 
   // Handle Date Selection from calendar

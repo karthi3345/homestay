@@ -5,19 +5,19 @@
   --font-sans: 'Outfit', sans-serif;
   --font-serif: 'Playfair Display', serif;
   
-  /* Color Palette (Warm Luxurious Gold and Deep Dark Charcoal) */
-  --color-bg: #0d0e11;
-  --color-accent: #d4af37;      /* Radiant Gold */
-  --color-accent-hover: #f3cf65;
-  --color-accent-rgb: 212, 175, 55;
+  /* Color Palette (Brand Yellow and True Black) */
+  --color-bg: #0a0a0c;
+  --color-accent: #ffc800;      /* Brand Yellow */
+  --color-accent-hover: #ffdf4d;
+  --color-accent-rgb: 255, 200, 0;
   
   --color-text-primary: #ffffff;
   --color-text-secondary: #a0a5b5;
   --color-text-muted: #6b7080;
   
-  --glass-bg: rgba(22, 24, 30, 0.65);
+  --glass-bg: rgba(15, 15, 20, 0.6);
   --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: rgba(0, 0, 0, 0.5);
+  --glass-shadow: rgba(0, 0, 0, 0.6);
   
   --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
   --transition-fast: all 0.2s ease;
@@ -40,59 +40,15 @@ body {
   position: relative;
 }
 
-/* Scrim & Slide Background (contained inside Hero Pane) */
-.hero-pane .slideshow-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  overflow: hidden;
-  border-radius: inherit;
-}
-
-/* Every slide fills the container, starts invisible */
-.hero-pane .slide-img {
-  position: absolute;
+/* Full Canvas Background */
+.page-bg-image {
+  position: fixed;
   inset: 0;
+  z-index: 0;
   background-size: cover;
   background-position: center;
-  opacity: 0;
-  /* Long fade out only — fade-in handled by .active */
-  transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: opacity, transform;
-  transform: scale(1.05);
-}
-
-/* Outgoing slide: fade out while still keeping its zoom going */
-.hero-pane .slide-img.leaving {
-  opacity: 0;
-  transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Active (incoming) slide: fade in with slow zoom */
-.hero-pane .slide-img.active {
-  opacity: 1;
-  z-index: 2;
-  animation: slideZoom 9s linear forwards;
-}
-
-@keyframes slideZoom {
-  0%   { transform: scale(1.05); }
-  100% { transform: scale(1.12); }
-}
-
-.hero-pane .scrim-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  background: linear-gradient(
-    170deg,
-    rgba(13, 14, 17, 0.15) 0%,
-    rgba(13, 14, 17, 0.5)  55%,
-    rgba(13, 14, 17, 0.88) 100%
-  );
+  transition: background-image 1.5s ease-in-out;
+  filter: saturate(0.5);
 }
 
 /* Master Layout */
@@ -105,49 +61,55 @@ body {
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   grid-template-rows: 1fr; /* Lock row height to viewport */
-  padding: 40px 60px;
+  padding: 40px 60px; /* Uniform outer padding */
   gap: 40px;
   box-sizing: border-box;
 }
 
-/* Left Pane: Branding & Hero */
 .hero-pane {
   position: relative;
-  overflow: hidden;
-  border-radius: 24px;
-  padding: 48px;
+  overflow: visible;
+  padding: 80px 0 0 0; /* Push hero content down so it clears the header */
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center; /* Center content vertically now that logo is moved out */
+  gap: 60px;
   height: 100%;
   color: var(--color-text-primary);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 
-.logo-area,
-.hero-content,
-.hero-footer {
-  position: relative;
-  z-index: 10; /* Stack above absolute slideshow elements */
+
+
+/* --- Liquid Glass Header --- */
+.site-header {
+  position: absolute;
+  top: -40px; /* Bleed up into viewport top padding to touch screen top */
+  left: -60px; /* Bleed left into viewport left padding */
+  right: -20px; /* Extend into half of the gap between the two panes */
+  height: 64px;
+  z-index: 100;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px 0 60px; /* Padding inside the header */
+  background: linear-gradient(to right, rgba(255, 200, 0, 1) 0%, rgba(255, 200, 0, 1) 20%, rgba(0, 0, 0, 0) 80%);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-bottom: 1px solid rgba(255, 200, 0, 0.4);
+  border-right: 1px solid rgba(255, 200, 0, 0.2);
+  border-bottom-right-radius: 24px; /* Soften the edge that hangs in the middle */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
-.logo-area {
+.header-left, .header-right {
   display: flex;
   align-items: center;
-  gap: 24px;
 }
 
 .logo {
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 24px;
-  letter-spacing: 6px;
-  color: #fff;
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  padding-right: 24px;
-  height: 32px;
-  display: flex;
-  align-items: center;
+  height: 44px;
+  width: auto;
+  object-fit: contain;
 }
 
 /* Property Dropdown Selector */
@@ -254,13 +216,13 @@ body {
   border-radius: 40px;
   cursor: pointer;
   transition: var(--transition-smooth);
-  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.25);
+  box-shadow: 0 4px 20px rgba(var(--color-accent-rgb), 0.25);
 }
 
 .btn-primary:hover {
   background: var(--color-accent-hover);
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.4);
+  box-shadow: 0 8px 30px rgba(var(--color-accent-rgb), 0.4);
 }
 
 .btn-primary:active {
@@ -303,15 +265,17 @@ body {
   width: 100%;
   height: 100%;
   min-height: 0; /* Constrain flex item height */
-  background: var(--glass-bg);
-  backdrop-filter: blur(25px) saturate(1.2);
-  -webkit-backdrop-filter: blur(25px) saturate(1.2);
-  border: 1px solid var(--glass-border);
+  background: rgba(10, 10, 12, 0.4);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 24px;
   box-shadow: 0 20px 50px var(--glass-shadow);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
+  overflow: visible; /* MUST BE VISIBLE for outer glow to spill out */
+  transition: var(--transition-smooth);
 }
 
 /* Card Navigation */
@@ -1098,4 +1062,101 @@ a.contact-value:hover {
   .lightbox-next {
     right: 10px;
   }
+}
+
+/* ==========================================================================
+   VANILLA BORDERGLOW PORT
+   ========================================================================== */
+.border-glow-card {
+  --edge-proximity: 0;
+  --cursor-angle: 45deg;
+  --edge-sensitivity: 30;
+  --color-sensitivity: calc(var(--edge-sensitivity) + 20);
+  --glow-padding: 40px;
+  --cone-spread: 25;
+  --fill-opacity: 0.5;
+
+  /* Volgo Yellow Glow (HSL: 47, 100%, 50%) */
+  --glow-color: hsl(47deg 100% 50% / 100%);
+  --glow-color-60: hsl(47deg 100% 50% / 60%);
+  --glow-color-50: hsl(47deg 100% 50% / 50%);
+  --glow-color-40: hsl(47deg 100% 50% / 40%);
+  --glow-color-30: hsl(47deg 100% 50% / 30%);
+  --glow-color-20: hsl(47deg 100% 50% / 20%);
+  --glow-color-10: hsl(47deg 100% 50% / 10%);
+
+  /* Complementary Purple/Blue Mesh Gradients for the spread */
+  --gradient-one: radial-gradient(at 80% 55%, #8000ff 0px, transparent 50%);
+  --gradient-two: radial-gradient(at 69% 34%, #5e35b1 0px, transparent 50%);
+  --gradient-three: radial-gradient(at 8% 6%, #8000ff 0px, transparent 50%);
+  --gradient-four: radial-gradient(at 41% 38%, #5e35b1 0px, transparent 50%);
+  --gradient-five: radial-gradient(at 86% 85%, #8000ff 0px, transparent 50%);
+  --gradient-six: radial-gradient(at 82% 18%, #5e35b1 0px, transparent 50%);
+  --gradient-seven: radial-gradient(at 51% 4%, #8000ff 0px, transparent 50%);
+  --gradient-base: linear-gradient(#311b92 0 100%);
+
+  isolation: isolate;
+}
+
+.border-glow-inner {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden; /* Contains the card content within border radius */
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  /* Removed opaque background so true glass effect works again */
+}
+
+.border-glow-card::before,
+.border-glow-card::after,
+.border-glow-card > .edge-light {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: opacity 0.25s ease-out;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.border-glow-card:not(:hover):not(.sweep-active)::before,
+.border-glow-card:not(:hover):not(.sweep-active)::after,
+.border-glow-card:not(:hover):not(.sweep-active) > .edge-light {
+  opacity: 0;
+  transition: opacity 0.75s ease-in-out;
+}
+
+/* Removed exposed ::before and ::after mechanisms. 
+   The glow is now entirely powered by edge-light and box-shadow */
+
+/* outer glow layer (Yellow) */
+.border-glow-card > .edge-light {
+  inset: calc(var(--glow-padding) * -1);
+  mask-image: conic-gradient(from var(--cursor-angle) at center, black 2.5%, transparent 10%, transparent 90%, black 97.5%);
+  opacity: calc((var(--edge-proximity) - var(--edge-sensitivity)) / (100 - var(--edge-sensitivity)));
+  mix-blend-mode: plus-lighter;
+}
+
+.border-glow-card > .edge-light::before {
+  content: "";
+  position: absolute;
+  inset: var(--glow-padding);
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px var(--glow-color),
+    inset 0 0 1px 0 var(--glow-color-60),
+    inset 0 0 3px 0 var(--glow-color-50),
+    inset 0 0 6px 0 var(--glow-color-40),
+    0 0 1px 0 var(--glow-color-60),
+    0 0 3px 0 var(--glow-color-50),
+    0 0 10px 0 var(--glow-color-40),
+    0 0 25px 0 var(--glow-color-30),
+    /* Red transition glow */
+    0 0 35px 2px rgba(255, 0, 50, 0.5),
+    /* Purple spreading glow */
+    0 0 50px 4px rgba(128, 0, 255, 0.3),
+    0 0 70px 8px rgba(128, 0, 255, 0.15);
 }

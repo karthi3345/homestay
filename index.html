@@ -19,28 +19,31 @@
 </head>
 <body>
 
+  <!-- Full Canvas Background -->
+  <div id="app-background" class="page-bg-image"></div>
+
   <!-- Main Viewport Layout -->
   <main class="viewport-layout">
     
     <!-- Left Pane: Hero Branding -->
     <section class="hero-pane">
-      <!-- Background Slideshow contained inside Hero Pane -->
-      <div class="slideshow-container" id="slideshow-bg">
-        <!-- Injected dynamically via JS -->
-      </div>
-      <div class="scrim-overlay"></div>
 
-      <header class="logo-area">
-        <div class="logo">VOLGO</div>
+      <!-- Liquid Glass Header (Partial Width) -->
+      <header class="site-header">
+        <div class="header-left">
+          <img src="assets/logo/volg-logo-main.png" alt="VOLGO" class="logo">
+        </div>
         
-        <!-- Scalable Homestay Selector -->
-        <div class="property-selector" id="propertySelector">
-          <div class="selected-property-btn" id="activePropertyBtn">
-            <span class="active-property-name">Loading...</span>
-            <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-          </div>
-          <div class="property-dropdown" id="propertyDropdown">
-            <!-- Dropdown items injected via JS -->
+        <div class="header-right">
+          <!-- Scalable Homestay Selector -->
+          <div class="property-selector" id="propertySelector">
+            <div class="selected-property-btn" id="activePropertyBtn">
+              <span class="active-property-name">Loading...</span>
+              <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+            </div>
+            <div class="property-dropdown" id="propertyDropdown">
+              <!-- Dropdown items injected via JS -->
+            </div>
           </div>
         </div>
       </header>
@@ -54,20 +57,16 @@
           <span class="material-symbols-outlined">calendar_today</span>
         </button>
       </div>
-      
-      <footer class="hero-footer">
-        <div class="slideshow-indicators" id="slideshowIndicators">
-          <!-- Indicators injected via JS -->
-        </div>
-      </footer>
     </section>
 
     <!-- Right Pane: Interactive Dashboard Card -->
     <section class="details-pane">
-      <div class="glass-card">
-        
-        <!-- Tab Navigation -->
-        <nav class="card-nav">
+      <div class="glass-card border-glow-card" id="overviewCard">
+        <span class="edge-light"></span>
+        <div class="border-glow-inner">
+          
+          <!-- Tab Navigation -->
+          <nav class="card-nav">
           <button class="nav-tab active" data-tab="overview">
             <span class="material-symbols-outlined">info</span>
             <span>Overview</span>
@@ -254,6 +253,7 @@
     </div>
   </div>
 
+  <!-- Javascript Modules -->
   <!-- Javascript Modules -->
   <script type="module" src="calendar.js"></script>
   <script type="module" src="app.js"></script>

@@ -191,7 +191,19 @@ app.get('/api/calendar/:propertyId.ics', (req, res) => {
 app.get('/api/periods/:propertyId', (req, res) => {
   const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
   const record = data.find(b => b.propertyId === req.params.propertyId);
-  res.json(record ? record.blockedPeriods : []);
+  
+  if (!record) return res.json([]);
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffMs = cutoff.getTime();
+
+  // Hide periods that ended more than 7 days ago (they stay in the JSON file safely)
+  const filtered = record.blockedPeriods.filter(p => {
+    return new Date(p.to).getTime() >= cutoffMs;
+  });
+
+  res.json(filtered);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
