@@ -175,17 +175,49 @@ document.addEventListener('DOMContentLoaded', () => {
     contactLocation.textContent = homestay.location;
     contactMap.src = homestay.mapEmbedUrl;
     
-    // Calendar Setup
-    if (calendarInstance) {
-      calendarInstance.setBookedDates(homestay.bookedDates);
-      calendarInstance.setMaxGuests(homestay.capacity);
-    } else {
-      calendarInstance = new HomestayCalendar('bookingCalendar', {
-        bookedDates: homestay.bookedDates,
-        maxGuests: homestay.capacity,
-        onSelectionChange: handleDateSelection
+    // Calendar Setup (Live Fetch)
+    const initCalendar = (dates) => {
+      if (calendarInstance) {
+        calendarInstance.setBookedDates(dates);
+        calendarInstance.setMaxGuests(homestay.capacity);
+      } else {
+        calendarInstance = new HomestayCalendar('bookingCalendar', {
+          bookedDates: dates,
+          maxGuests: homestay.capacity,
+          onSelectionChange: handleDateSelection
+        });
+      }
+    };
+    
+    // Optimistically load from homestays.json, then fetch live
+    initCalendar(homestay.bookedDates);
+    
+    fetch('/api/periods/' + homestay.id)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch live availability');
+        return res.json();
+      })
+      .then(livePeriods => {
+        // convert [{from, to}] into an array of date strings for calendar.js
+        const booked = new Set();
+        livePeriods.forEach(p => {
+          let curr = new Date(p.from);
+          const end = new Date(p.to);
+          while (curr < end) {
+            booked.add(curr.toISOString().split('T')[0]);
+            curr.setDate(curr.getDate() + 1);
+          }
+        });
+        initCalendar(Array.from(booked));
+      })
+      .catch(err => {
+        console.error(err);
+        const calEl = document.getElementById('bookingCalendar');
+        if (calEl) {
+          calEl.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--danger);">Unable to retrieve live availability. Please try again shortly.</div>';
+          calendarInstance = null;
+        }
       });
-    }
     
     // Slideshow Background Setup
     initBackgroundSlideshow(homestay.images);
@@ -300,6 +332,12 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Please provide your Full Name and WhatsApp Number.');
           return;
         }
+
+        const phoneRegex = /^\+?[0-9]{10,15}$/;
+        if (!phoneRegex.test(guestPhone)) {
+          alert('Please enter a valid phone number (10-15 digits), optionally starting with +.');
+          return;
+        }
         
         whatsappBookBtn.disabled = true;
         const originalText = whatsappBookBtn.querySelector('span').textContent;
@@ -328,6 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           if (res.ok) {
             whatsappBookBtn.querySelector('span').textContent = 'Request Sent!';
+            alert('Thank you. Your booking request has been sent. We\'ll contact you on WhatsApp shortly to confirm availability.');
             setTimeout(() => {
               whatsappBookBtn.querySelector('span').textContent = originalText;
               whatsappBookBtn.disabled = false;
@@ -339,9 +378,10 @@ document.addEventListener('DOMContentLoaded', () => {
               calendarInstance.checkOut = null;
               calendarInstance._drawGrid();
               calendarInstance._notify();
-            }, 3000);
+            }, 1000);
           } else {
-            alert('Failed to send request. Please try again.');
+            const errData = await res.json();
+            alert(errData.error || 'Failed to send request. Please try again.');
             whatsappBookBtn.disabled = false;
             whatsappBookBtn.querySelector('span').textContent = originalText;
           }

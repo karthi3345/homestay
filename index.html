@@ -139,6 +139,16 @@
             <div class="pane-header">
               <h2 class="pane-title">Availability</h2>
               <p class="pane-subtitle">Select your stay dates to request booking</p>
+              
+              <div class="calendar-meta-info" style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; font-size:13px;">
+                <div class="calendar-legend" style="display:flex; gap:16px;">
+                  <span style="display:flex; align-items:center; gap:6px; font-weight:500;"><span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:var(--accent);"></span> Available</span>
+                  <span style="display:flex; align-items:center; gap:6px; color:var(--muted);"><span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:rgba(255,255,255,0.05); text-decoration:line-through;"></span> Booked</span>
+                </div>
+                <div class="calendar-rules" style="color:var(--muted); font-weight:500;">
+                  Check-in: 2 PM &nbsp;|&nbsp; Check-out: 11 AM
+                </div>
+              </div>
             </div>
             
             <div id="bookingCalendar" class="calendar-container">
@@ -153,7 +163,7 @@
                 </div>
                 <div class="input-group">
                   <label for="guestPhone">WhatsApp Number</label>
-                  <input type="tel" id="guestPhone" placeholder="+1234567890" required />
+                  <input type="tel" id="guestPhone" placeholder="+919876543210" pattern="^\+?[0-9]{10,15}$" title="Please enter a valid phone number (10-15 digits), optionally starting with +" required />
                 </div>
               </div>
               <div class="booking-note-container">
@@ -163,7 +173,7 @@
               <button class="btn-primary btn-book" id="whatsappBookBtn" disabled>
                 <span>Request Booking</span>
               </button>
-              <div class="booking-notice">No advance payment required. Pay in person during check-in.</div>
+              <div class="booking-notice">Payment in person during check-in. No advance needed.</div>
             </div>
           </div>
           
@@ -179,7 +189,7 @@
                 <span class="material-symbols-outlined contact-icon">phone_in_talk</span>
                 <div class="contact-info">
                   <div class="contact-label">Call Us</div>
-                  <a href="" id="contactPhone" class="contact-value">+1 (555) 019-2834</a>
+                  <a href="" id="contactPhone" class="contact-value">+91 97517 18950</a>
                 </div>
               </div>
               
@@ -195,7 +205,7 @@
                 <span class="material-symbols-outlined contact-icon">mail</span>
                 <div class="contact-info">
                   <div class="contact-label">Email</div>
-                  <a href="" id="contactEmail" class="contact-value">stay@volgohomestay.com</a>
+                  <a href="" id="contactEmail" class="contact-value">mdu.mathivaanan@gmail.com</a>
                 </div>
               </div>
               

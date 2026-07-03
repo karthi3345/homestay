@@ -19,6 +19,8 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
-    "express-basic-auth": "^1.2.1"
+    "dotenv": "^17.4.2",
+    "express-basic-auth": "^1.2.1",
+    "nodemailer": "^9.0.3"
   }
 }

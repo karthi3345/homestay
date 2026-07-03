@@ -3,9 +3,18 @@
     "propertyId": "volgo-alpine-retreat",
     "blockedPeriods": [
       {
-        "from": "2026-07-10",
-        "to":   "2026-07-15",
-        "note": "Direct booking"
+        "from": "2026-07-04",
+        "to": "2026-07-05",
+        "note": "[Auto] Bookings.com",
+        "external": true,
+        "source": "feed-1783048443579"
+      },
+      {
+        "from": "2026-07-17",
+        "to": "2026-07-19",
+        "note": "[Auto] Bookings.com",
+        "external": true,
+        "source": "feed-1783048443579"
       }
     ]
   }

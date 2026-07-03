@@ -12,6 +12,10 @@ import basicAuth from 'express-basic-auth';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
+
+dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BOOKINGS_FILE = path.join(__dirname, 'data', 'direct-bookings.json');
@@ -27,16 +31,85 @@ app.use(express.json());
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public API (No Auth)
 // ─────────────────────────────────────────────────────────────────────────────
+const rateLimit = {};
+setInterval(() => {
+  const now = Date.now();
+  for (const ip in rateLimit) {
+    if (now - rateLimit[ip].time > 600000) delete rateLimit[ip];
+  }
+}, 60000);
+
 app.post('/api/request-booking', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress;
+  if (!rateLimit[ip]) rateLimit[ip] = { count: 0, time: Date.now() };
+  if (Date.now() - rateLimit[ip].time > 600000) { rateLimit[ip].count = 0; rateLimit[ip].time = Date.now(); }
+  if (rateLimit[ip].count >= 5) return res.status(429).json({error: 'Too many requests. Please try again later.'});
+  rateLimit[ip].count++;
+
   const payload = req.body;
+  if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
+    return res.status(400).json({error: 'Invalid phone number format.'});
+  }
+
+  // Check Availability
+  const d1 = new Date(payload.checkInMs);
+  const d2 = new Date(payload.checkOutMs);
+  const fromStr = d1.toISOString().split('T')[0];
+  const toStr = d2.toISOString().split('T')[0];
+  
+  if (fs.existsSync(BOOKINGS_FILE)) {
+    const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+    const record = data.find(b => b.propertyId === payload.homestayId);
+    if (record) {
+      const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
+      if (overlap) return res.status(409).json({error: 'Sorry, these dates have just been booked. Please choose different dates.'});
+    }
+  }
+
   if (!fs.existsSync(PENDING_FILE)) fs.writeFileSync(PENDING_FILE, '[]');
   const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
   
-  payload.id = Date.now().toString(); // unique ID
+  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const rand = Math.floor(100 + Math.random() * 900);
+  payload.id = `VH-${dateStr}-${rand}`;
   payload.timestamp = new Date().toISOString();
   
   pending.push(payload);
   fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  
+  console.log("Checking email credentials:", process.env.EMAIL_USER, process.env.EMAIL_PASS ? '***' : 'missing');
+
+  // Fire and forget email notification
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    const mailOptions = {
+      from: '"Volgo Booking Alert" <' + process.env.EMAIL_USER + '>',
+      to: process.env.EMAIL_USER,
+      subject: "🎉 New Booking Request - " + payload.homestayName,
+      html: "<h2>New Booking Request Received!</h2>" +
+            "<p><strong>Property:</strong> " + payload.homestayName + "</p>" +
+            "<p><strong>Guest Name:</strong> " + payload.guestName + "</p>" +
+            "<p><strong>Phone / WhatsApp:</strong> " + payload.guestPhone + "</p>" +
+            "<p><strong>Check-In:</strong> " + payload.checkIn + "</p>" +
+            "<p><strong>Check-Out:</strong> " + payload.checkOut + "</p>" +
+            "<p><strong>Guests:</strong> " + payload.adults + " Adults, " + payload.children + " Children</p>" +
+            "<p><strong>Note:</strong> " + (payload.note || 'None') + "</p>" +
+            "<br/>" +
+            '<a href="http://localhost:3000/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
+    };
+
+    transporter.sendMail(mailOptions)
+      .then(info => console.log("Email successfully dispatched to Gmail:", info.response))
+      .catch(err => console.error("Email send failed:", err));
+  }
+
   res.json({ success: true, id: payload.id });
 });
 
@@ -67,45 +140,50 @@ function foldLine(l) {
 }
 
 function regenerateIcal() {
-  if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
-  const properties = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
-  const allBlocked = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
-
-  for (const prop of properties) {
-    const record = allBlocked.find(b => b.propertyId === prop.id);
-    const periods = record ? record.blockedPeriods : [];
-    const now = icalNow();
-
-    const lines = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0',
-      `PRODID:-//Volgo Homestay//${prop.name}//EN`,
-      'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-      `X-WR-CALNAME:${prop.name} – Availability`,
-      'X-WR-TIMEZONE:Asia/Kolkata',
-    ];
-
-    periods.forEach((p, i) => {
-      lines.push('BEGIN:VEVENT',
-        `UID:blocked-${i + 1}-${prop.id}@volgohomestay`,
-        `DTSTAMP:${now}`,
-        `DTSTART;VALUE=DATE:${icalDate(p.from)}`,
-        `DTEND;VALUE=DATE:${icalDate(p.to)}`,
-        'SUMMARY:Not Available',
-        'STATUS:CONFIRMED', 'TRANSP:OPAQUE', 'END:VEVENT');
-    });
-    lines.push('END:VCALENDAR');
-
-    // Also write to dist if it exists, so the live server serves the updated file
-    const icsContent = lines.map(foldLine).join('\r\n') + '\r\n';
-    fs.writeFileSync(path.join(PUBLIC_DIR, `${prop.id}.ics`), icsContent, 'utf-8');
-    
-    if (fs.existsSync(DIST_DIR)) {
-      fs.writeFileSync(path.join(DIST_DIR, `${prop.id}.ics`), icsContent, 'utf-8');
-    }
-    
-    console.log(`[ical] Regenerated ${prop.id}.ics — ${periods.length} blocked period(s)`);
-  }
+  // No-op: iCal is now generated dynamically via GET /api/calendar/:propertyId.ics
 }
+
+app.get('/api/calendar/:propertyId.ics', (req, res) => {
+  const propertyId = req.params.propertyId;
+  const properties = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
+  const prop = properties.find(p => p.id === propertyId);
+  
+  if (!prop) return res.status(404).send('Property not found');
+  
+  let allBlocked = [];
+  if (fs.existsSync(BOOKINGS_FILE)) {
+    allBlocked = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  }
+  
+  const record = allBlocked.find(b => b.propertyId === propertyId);
+  const periods = record ? record.blockedPeriods : [];
+  const now = icalNow();
+
+  const lines = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0',
+    `PRODID:-//VolGO Homestay//Booking Calendar//EN`,
+    'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-CALNAME:${prop.name} – Availability`,
+    'X-WR-TIMEZONE:Asia/Kolkata',
+  ];
+
+  periods.forEach((p, i) => {
+    lines.push('BEGIN:VEVENT',
+      `UID:booking-${i + 1}-${prop.id}@volgo.in`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${icalDate(p.from)}`,
+      `DTEND;VALUE=DATE:${icalDate(p.to)}`,
+      'SUMMARY:Booked',
+      'STATUS:CONFIRMED', 'TRANSP:OPAQUE', 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+
+  const icsContent = lines.map(foldLine).join('\r\n') + '\r\n';
+  
+  res.setHeader('Content-Type', 'text/calendar');
+  res.setHeader('Content-Disposition', `attachment; filename="${propertyId}.ics"`);
+  res.send(icsContent);
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: get blocked periods
@@ -123,6 +201,17 @@ app.post('/api/periods/:propertyId', (req, res) => {
   const { from, to, note } = req.body;
   if (!from || !to || from >= to) {
     return res.status(400).json({ error: 'Invalid dates. "from" must be before "to".' });
+  }
+
+  // Warn if overlaps with pending
+  if (fs.existsSync(PENDING_FILE)) {
+    const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+    const d1 = new Date(from).getTime();
+    const d2 = new Date(to).getTime();
+    const overlapPending = pending.some(p => p.homestayId === req.params.propertyId && d1 < p.checkOutMs && d2 > p.checkInMs);
+    if (overlapPending && !req.query.force) {
+      return res.status(409).json({ error: 'OVERLAP_PENDING', msg: 'These dates overlap with a pending booking request! Confirm to overwrite.' });
+    }
   }
 
   const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
@@ -167,9 +256,42 @@ app.delete('/api/periods/:propertyId/:index', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: get, approve, decline pending requests
 // ─────────────────────────────────────────────────────────────────────────────
+const HISTORY_FILE = path.join(__dirname, 'data', 'booking-history.json');
+function saveToHistory(reqObj, status) {
+  if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, '[]');
+  const history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
+  reqObj.status = status;
+  reqObj.updatedAt = new Date().toISOString();
+  history.push(reqObj);
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+}
+
 app.get('/api/pending-requests', (req, res) => {
   if (!fs.existsSync(PENDING_FILE)) return res.json([]);
-  res.json(JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8')));
+  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  
+  // Auto-expire >24h old requests and save to history
+  const now = Date.now();
+  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const validPending = [];
+  pending.forEach(r => {
+    if ((now - new Date(r.timestamp).getTime()) >= ONE_DAY) saveToHistory(r, 'Expired');
+    else validPending.push(r);
+  });
+  if (validPending.length !== pending.length) fs.writeFileSync(PENDING_FILE, JSON.stringify(validPending, null, 2));
+  pending = validPending;
+  
+  // Check for overlaps among pending requests
+  const requestsWithOverlap = pending.map(r => {
+    const hasOverlap = pending.some(other => 
+      other.id !== r.id && 
+      other.homestayId === r.homestayId &&
+      r.checkInMs < other.checkOutMs && r.checkOutMs > other.checkInMs
+    );
+    return { ...r, hasOverlap };
+  });
+  
+  res.json(requestsWithOverlap);
 });
 
 app.post('/api/approve-request/:id', (req, res) => {
@@ -193,18 +315,24 @@ app.post('/api/approve-request/:id', (req, res) => {
   const fromStr = d1.toISOString().split('T')[0];
   const toStr = d2.toISOString().split('T')[0];
   
+  // FINAL AVAILABILITY CHECK BEFORE APPROVING
+  const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
+  if (overlap) {
+    return res.status(409).json({error: 'These dates were booked on another platform (or manually). This request can no longer be approved.'});
+  }
+  
   record.blockedPeriods.push({
     from: fromStr,
     to: toStr,
-    note: `[Approved] ${reqObj.guestName} (${reqObj.adults}A, ${reqObj.children}C) ${reqObj.note}`
+    note: '[Approved] ' + reqObj.guestName
   });
   
   fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
-  regenerateIcal();
   
-  // Remove from pending
+  // Remove from pending and save to history
   pending = pending.filter(r => r.id !== id);
   fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  saveToHistory(reqObj, 'Approved');
   
   res.json({ success: true });
 });
@@ -213,10 +341,176 @@ app.delete('/api/decline-request/:id', (req, res) => {
   const id = req.params.id;
   if (!fs.existsSync(PENDING_FILE)) return res.json({success: true});
   let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  const reqObj = pending.find(r => r.id === id);
+  if (reqObj) saveToHistory(reqObj, 'Declined');
+  
   pending = pending.filter(r => r.id !== id);
   fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
   res.json({ success: true });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  API: External Calendar Sync
+// ─────────────────────────────────────────────────────────────────────────────
+const EXTERNAL_ICAL_FILE = path.join(__dirname, 'data', 'external-icals.json');
+
+function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
+  const events = text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
+  
+  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  let record = data.find(b => b.propertyId === propertyId);
+  if (!record) { record = { propertyId, blockedPeriods: [] }; data.push(record); }
+  
+  // Remove previously imported events from THIS SPECIFIC FEED
+  record.blockedPeriods = record.blockedPeriods.filter(p => p.source !== feedId);
+  
+  events.forEach(ev => {
+    const startMatch = ev.match(/DTSTART(?:;[^:]+)?:(\d{8})/);
+    const endMatch = ev.match(/DTEND(?:;[^:]+)?:(\d{8})/);
+    if (startMatch && endMatch) {
+      const s = startMatch[1];
+      const e = endMatch[1];
+      const from = `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
+      const to = `${e.substring(0,4)}-${e.substring(4,6)}-${e.substring(6,8)}`;
+      // Don't import our own generated iCals back (infinite loop safety)
+      if (!ev.includes('@volgo.in') && !ev.includes('@volgohomestay')) {
+        record.blockedPeriods.push({ from, to, note: `[Auto] ${feedName}`, external: true, source: feedId });
+      }
+    }
+  });
+  
+  record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
+  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
+}
+
+app.get('/api/external-ical/:propertyId', (req, res) => {
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({ feeds: [] });
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const rec = data.find(d => d.propertyId === req.params.propertyId);
+  res.json(rec || { feeds: [] });
+});
+
+app.post('/api/external-ical/:propertyId/add', async (req, res) => {
+  const { name, url } = req.body;
+  if (!name || !url) return res.status(400).json({error: 'Name and URL required'});
+  
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) fs.writeFileSync(EXTERNAL_ICAL_FILE, '[]');
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  
+  let rec = data.find(d => d.propertyId === req.params.propertyId);
+  if (!rec) { rec = { propertyId: req.params.propertyId, feeds: [] }; data.push(rec); }
+  if (!rec.feeds) rec.feeds = [];
+  
+  const feedId = 'feed-' + Date.now();
+  const newFeed = { id: feedId, name, url, enabled: true, lastSync: null, status: 'Pending' };
+  rec.feeds.push(newFeed);
+  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  
+  // Try immediate sync
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Bad status');
+    syncIcalTextToProperty(await response.text(), req.params.propertyId, feedId, name);
+    newFeed.status = 'Success';
+    newFeed.lastSync = new Date().toISOString();
+  } catch(e) {
+    newFeed.status = 'Failed';
+    newFeed.lastSync = new Date().toISOString();
+  }
+  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  res.json({success: true});
+});
+
+app.post('/api/external-ical/:propertyId/toggle/:feedId', (req, res) => {
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({success: false});
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const rec = data.find(d => d.propertyId === req.params.propertyId);
+  if (rec && rec.feeds) {
+    const feed = rec.feeds.find(f => f.id === req.params.feedId);
+    if (feed) {
+      feed.enabled = !feed.enabled;
+      if (!feed.enabled) {
+        // Remove existing external blocks for this feed when disabled
+        const bData = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+        let bRecord = bData.find(b => b.propertyId === req.params.propertyId);
+        if (bRecord) {
+          bRecord.blockedPeriods = bRecord.blockedPeriods.filter(p => p.source !== feed.id);
+          fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bData, null, 2));
+        }
+      }
+      fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+    }
+  }
+  res.json({success: true});
+});
+
+app.delete('/api/external-ical/:propertyId/:feedId', (req, res) => {
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({success: false});
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const rec = data.find(d => d.propertyId === req.params.propertyId);
+  if (rec && rec.feeds) {
+    rec.feeds = rec.feeds.filter(f => f.id !== req.params.feedId);
+    fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+    
+    // Clean up blocks
+    const bData = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+    let bRecord = bData.find(b => b.propertyId === req.params.propertyId);
+    if (bRecord) {
+      bRecord.blockedPeriods = bRecord.blockedPeriods.filter(p => p.source !== req.params.feedId);
+      fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bData, null, 2));
+    }
+  }
+  res.json({success: true});
+});
+
+app.post('/api/external-ical/:propertyId/sync/:feedId', async (req, res) => {
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.status(404).json({error:'No feeds'});
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const rec = data.find(d => d.propertyId === req.params.propertyId);
+  if (!rec || !rec.feeds) return res.status(404).json({error:'Not found'});
+  const feed = rec.feeds.find(f => f.id === req.params.feedId);
+  if (!feed) return res.status(404).json({error:'Feed not found'});
+  
+  try {
+    const response = await fetch(feed.url);
+    if (!response.ok) throw new Error('Bad status');
+    syncIcalTextToProperty(await response.text(), req.params.propertyId, feed.id, feed.name);
+    feed.status = 'Success';
+    feed.lastSync = new Date().toISOString();
+  } catch(e) {
+    feed.status = 'Failed';
+    feed.lastSync = new Date().toISOString();
+  }
+  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  res.json({success: true});
+});
+
+// Background sync every 15 mins
+setInterval(async () => {
+  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return;
+  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  let changed = false;
+  for (const rec of data) {
+    if (rec.feeds) {
+      for (const feed of rec.feeds) {
+        if (feed.enabled) {
+          try {
+            const response = await fetch(feed.url);
+            if (!response.ok) throw new Error('Bad status');
+            syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
+            feed.status = 'Success';
+            feed.lastSync = new Date().toISOString();
+          } catch(e) {
+            feed.status = 'Failed';
+            feed.lastSync = new Date().toISOString();
+          }
+          changed = true;
+        }
+      }
+    }
+  }
+  if (changed) fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+}, 15 * 60 * 1000);
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GET /admin → Serve the protected admin UI
@@ -396,9 +690,35 @@ app.get('/admin', (req, res) => {
     <div class="form-row full">
       <div>
         <label>Select Property</label>
-        <select id="propertySelect" onchange="loadPeriods()">
+        <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal();">
           ${propertyOptions}
         </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- External Calendar Sync -->
+  <div class="card">
+    <div class="card-title">External Calendar Sync</div>
+    
+    <div class="form-row">
+      <div style="flex:1">
+        <label>Platform Name</label>
+        <input type="text" id="feedName" placeholder="e.g. Airbnb">
+      </div>
+      <div style="flex:2">
+        <label>iCal URL</label>
+        <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addExternalIcal()">
+      ⊕ &nbsp; Add Calendar
+    </button>
+
+    <div style="margin-top:24px;">
+      <label>Configured Calendars (Auto-sync every 15 mins)</label>
+      <div id="feedsList" class="periods-list">
+        <div class="empty-state">Loading...</div>
       </div>
     </div>
   </div>
@@ -461,9 +781,12 @@ app.get('/admin', (req, res) => {
 
   function getPropertyId() { return document.getElementById('propertySelect').value; }
 
+  let pendingDataCache = [];
+  
   async function loadPendingRequests() {
     const res = await fetch('/api/pending-requests');
     const requests = await res.json();
+    pendingDataCache = requests;
     const list = document.getElementById('pendingList');
     
     if (!requests.length) {
@@ -476,35 +799,58 @@ app.get('/admin', (req, res) => {
       const d1 = new Date(r.checkInMs).toLocaleDateString();
       const d2 = new Date(r.checkOutMs).toLocaleDateString();
       
+      const overlapBadge = r.hasOverlap ? \`<div style="color:var(--danger); font-size:12px; font-weight:600; margin-bottom:8px;">⚠️ Overlaps with another pending request!</div>\` : '';
+      
       return \`
         <div class="request-card">
           <div class="request-header">
-            <span class="request-guest">\${r.guestName}</span>
+            <div>
+              <span class="request-guest">\${r.guestName}</span>
+              <span style="font-size:11px; color:var(--muted); margin-left:8px;">\${r.id || ''}</span>
+            </div>
             <span class="request-prop">\${r.homestayName}</span>
           </div>
+          \${overlapBadge}
           <div class="request-dates">\${d1} → \${d2}</div>
           <div class="request-details">\${r.adults} Adults, \${r.children} Children | Phone: \${r.guestPhone}</div>
           \${r.note ? \`<div class="request-note">"\${r.note}"</div>\` : ''}
           <div class="request-actions">
-            <button class="btn-approve" onclick="approveRequest('\${r.id}')">Approve</button>
-            <button class="btn-decline" onclick="declineRequest('\${r.id}')">Decline</button>
-            <a class="btn-whatsapp" href="https://wa.me/\${wNumber}?text=Hi \${r.guestName}, regarding your booking..." target="_blank">Message</a>
+            <button class="btn-approve" id="approve-\${r.id}" onclick="approveRequest('\${r.id}', this)">Approve</button>
+            <button class="btn-decline" id="decline-\${r.id}" onclick="declineRequest('\${r.id}', this)">Decline</button>
+            <a class="btn-whatsapp" href="https://wa.me/\${wNumber}?text=Hi \${r.guestName}, regarding your booking at \${r.homestayName}..." target="_blank">WhatsApp</a>
+            <a href="tel:\${wNumber}" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--text); text-decoration: none; font-size: 13px;">Call</a>
           </div>
         </div>
       \`;
     }).join('');
   }
   
-  async function approveRequest(id) {
-    if (!confirm('Approve?')) return;
+  async function approveRequest(id, btn) {
+    const reqObj = pendingDataCache.find(r => r.id === id);
+    if (!reqObj) return;
+    const d1 = new Date(reqObj.checkInMs).toLocaleDateString();
+    const d2 = new Date(reqObj.checkOutMs).toLocaleDateString();
+    const msg = 'Confirm Booking?\\n\\nGuest: ' + reqObj.guestName + '\\nDates: ' + d1 + ' - ' + d2 + '\\n\\nThis action will block these dates.';
+    if (!confirm(msg)) return;
+    
+    const orig = btn.textContent;
+    btn.textContent = '...'; btn.disabled = true;
     const res = await fetch('/api/approve-request/' + id, { method: 'POST' });
     if (res.ok) { showToast('Approved!'); loadPendingRequests(); loadPeriods(); }
+    else { 
+      const err = await res.json();
+      btn.textContent = orig; btn.disabled = false; 
+      alert(err.error || 'Error'); 
+    }
   }
   
-  async function declineRequest(id) {
+  async function declineRequest(id, btn) {
     if (!confirm('Decline?')) return;
+    const orig = btn.textContent;
+    btn.textContent = '...'; btn.disabled = true;
     const res = await fetch('/api/decline-request/' + id, { method: 'DELETE' });
     if (res.ok) { showToast('Declined'); loadPendingRequests(); }
+    else { btn.textContent = orig; btn.disabled = false; }
   }
 
   async function loadPeriods() {
@@ -519,27 +865,41 @@ app.get('/admin', (req, res) => {
     }
 
     list.innerHTML = periods.map((p, i) => \`
-      <div class="period-row">
-        <div>
-          <div class="period-dates">\${fmtDate(p.from)} &nbsp;→&nbsp; \${fmtDate(p.to)}</div>
-          <div class="period-duration">\${nights(p.from, p.to)}</div>
-          \${p.note ? \`<div class="period-note">\${p.note}</div>\` : ''}
+        <div class="period-row">
+          <div>
+            <div class="period-dates">\${fmtDate(p.from)} &nbsp;→&nbsp; \${fmtDate(p.to)}</div>
+            <div class="period-duration">\${nights(p.from, p.to)}</div>
+            \${p.note ? \`<div class="period-note">\${p.note}</div>\` : ''}
+          </div>
+          \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${i})">Remove</button>\`}
         </div>
-        <button class="btn-delete" onclick="removePeriod(\${i})">Remove</button>
-      </div>
-    \`).join('');
+      \`).join('');
   }
 
-  async function addPeriod() {
+  async function addPeriod(force = false) {
     const from = document.getElementById('fromDate').value;
     const to = document.getElementById('toDate').value;
     const note = document.getElementById('noteInput').value;
     if (!from || !to) return showToast('Please select dates', 'error');
-    const res = await fetch('/api/periods/' + getPropertyId(), {
+    
+    let url = '/api/periods/' + getPropertyId();
+    if (force) url += '?force=true';
+    
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ from, to, note })
     });
+    
+    if (res.status === 409) {
+      const err = await res.json();
+      if (err.error === 'OVERLAP_PENDING') {
+        if (confirm(err.msg)) addPeriod(true);
+        return;
+      }
+      return showToast(err.error || 'Conflict', 'error');
+    }
+    
     if (res.ok) {
       showToast('Dates blocked');
       document.getElementById('fromDate').value = '';
@@ -558,7 +918,96 @@ app.get('/admin', (req, res) => {
     }
   }
 
+  async function loadExternalIcal() {
+    const pid = getPropertyId();
+    const res = await fetch('/api/external-ical/' + pid);
+    const list = document.getElementById('feedsList');
+    if (!res.ok) { list.innerHTML = '<div class="empty-state">Failed to load</div>'; return; }
+    const data = await res.json();
+    const feeds = data.feeds || [];
+    
+    if (!feeds.length) {
+      list.innerHTML = '<div class="empty-state">No external calendars configured.</div>';
+      return;
+    }
+    
+    list.innerHTML = feeds.map(f => {
+      const d = f.lastSync ? new Date(f.lastSync).toLocaleString() : 'Never';
+      const statusBadge = f.status === 'Success' 
+        ? '<span style="color:var(--success)">✓ Success</span>' 
+        : (f.status === 'Failed' ? '<span style="color:var(--danger)">❌ Failed</span>' : '<span>⏳ Pending</span>');
+        
+      return '<div class="period-row" style="opacity: ' + (f.enabled ? '1' : '0.5') + '">' +
+               '<div>' +
+                 '<div class="period-dates">' + f.name + '</div>' +
+                 '<div class="period-duration" style="font-family:monospace; margin-top:5px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px;">' + f.url + '</div>' +
+                 '<div class="period-note">Last Sync: ' + d + ' &nbsp;|&nbsp; ' + statusBadge + '</div>' +
+               '</div>' +
+               '<div style="display:flex; gap:8px;">' +
+                 '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="syncFeed(\\'' + f.id + '\\')">Sync</button>' +
+                 '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="toggleFeed(\\'' + f.id + '\\')">' + (f.enabled ? 'Disable' : 'Enable') + '</button>' +
+                 '<button class="btn-delete" onclick="removeFeed(\\'' + f.id + '\\')">Remove</button>' +
+               '</div>' +
+             '</div>';
+    }).join('');
+  }
+
+  async function addExternalIcal() {
+    const pid = getPropertyId();
+    const name = document.getElementById('feedName').value;
+    const url = document.getElementById('feedUrl').value;
+    if (!name || !url) return showToast('Please enter a name and URL', 'error');
+    
+    const btn = event.currentTarget;
+    const orig = btn.innerHTML;
+    btn.innerHTML = 'Adding...'; btn.disabled = true;
+    
+    const res = await fetch('/api/external-ical/' + pid + '/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url })
+    });
+    
+    btn.innerHTML = orig; btn.disabled = false;
+    if (res.ok) {
+      showToast('Calendar Added & Synced!');
+      document.getElementById('feedName').value = '';
+      document.getElementById('feedUrl').value = '';
+      loadExternalIcal();
+      loadPeriods();
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Failed to add', 'error');
+    }
+  }
+
+  async function toggleFeed(feedId) {
+    await fetch('/api/external-ical/' + getPropertyId() + '/toggle/' + feedId, { method: 'POST' });
+    loadExternalIcal();
+    loadPeriods();
+  }
+
+  async function removeFeed(feedId) {
+    if (!confirm('Remove this calendar feed?')) return;
+    await fetch('/api/external-ical/' + getPropertyId() + '/' + feedId, { method: 'DELETE' });
+    loadExternalIcal();
+    loadPeriods();
+  }
+
+  async function syncFeed(feedId) {
+    showToast('Syncing feed...');
+    const res = await fetch('/api/external-ical/' + getPropertyId() + '/sync/' + feedId, { method: 'POST' });
+    if (res.ok) {
+      showToast('Sync complete!');
+      loadExternalIcal();
+      loadPeriods();
+    } else {
+      showToast('Sync failed', 'error');
+    }
+  }
+
   loadPeriods();
+  loadExternalIcal();
   loadPendingRequests();
 </script>
 </body>

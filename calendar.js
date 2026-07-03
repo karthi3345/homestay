@@ -142,7 +142,9 @@ class HomestayCalendar {
       const date   = this._midnight(new Date(this.viewYear, this.viewMonth, d));
       const ms     = date.getTime();
       const dateStr = this._fmt(date);
-      const isPast   = ms < today.getTime();
+      // Disable past dates, today, and dates > 365 days in future
+      const isPast   = ms <= today.getTime();
+      const isTooFar = ms > today.getTime() + (365 * 24 * 60 * 60 * 1000);
       const isBooked = this.bookedDates.has(dateStr);
 
       const el = document.createElement('div');
@@ -151,8 +153,8 @@ class HomestayCalendar {
       el.dataset.date = dateStr;
       el.dataset.ms   = ms;
 
-      if (isPast || isBooked) {
-        // Hard disabled: past or booked
+      if (isPast || isTooFar || isBooked) {
+        // Hard disabled: past, today, too far, or booked
         el.classList.add('unavailable');
       } else if (capMs !== null && ms >= capMs) {
         // Soft disabled: beyond a booked cap after check-in
