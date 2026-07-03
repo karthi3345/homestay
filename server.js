@@ -567,7 +567,8 @@ app.get('/admin', (req, res) => {
       --muted:    #7a7a8a;
       --danger:   #e05555;
       --success:  #4caf87;
-      --radius:   14px;
+      --radius:   12px;
+      --transition: all 0.25s ease;
     }
 
     body {
@@ -580,19 +581,21 @@ app.get('/admin', (req, res) => {
 
     /* ── Header ── */
     header {
-      background: var(--surface);
+      background: rgba(22, 24, 29, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      padding: 20px 40px;
+      padding: 16px 40px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 20px;
       position: sticky;
       top: 0;
       z-index: 100;
     }
-    .logo-text { font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--accent); }
-    .logo-divider { width: 1px; height: 28px; background: var(--border); }
-    .header-title { font-size: 15px; color: var(--muted); font-weight: 400; }
+    .admin-logo { height: 40px; width: auto; object-fit: contain; filter: invert(1) opacity(0.85); }
+    .logo-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-title { font-size: 14px; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
 
     /* ── Layout ── */
     .container { max-width: 820px; margin: 0 auto; padding: 40px 24px 0; }
@@ -602,16 +605,18 @@ app.get('/admin', (req, res) => {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 28px 32px;
+      padding: 32px;
       margin-bottom: 24px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .card-title {
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
+      letter-spacing: 2px;
       color: var(--accent);
       font-weight: 600;
       margin-bottom: 24px;
+      opacity: 0.9;
     }
 
     /* ── Pending Requests ── */
@@ -695,7 +700,7 @@ app.get('/admin', (req, res) => {
 <body>
 
 <header>
-  <div class="logo-text">VOLGO</div>
+  <img src="/assets/logo/volg-logo-main.png" alt="VOLGO" class="admin-logo">
   <div class="logo-divider"></div>
   <div class="header-title">Booking Admin — Availability Manager</div>
 </header>

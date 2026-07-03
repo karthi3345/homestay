@@ -23,6 +23,7 @@ const PORT           = 3001;
 
 const app = express();
 app.use(express.json());
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  iCal generator (inline — so admin server is self-contained)
@@ -162,7 +163,8 @@ app.get('/', (req, res) => {
       --muted:    #7a7a8a;
       --danger:   #e05555;
       --success:  #4caf87;
-      --radius:   14px;
+      --radius:   12px;
+      --transition: all 0.25s ease;
     }
 
     body {
@@ -175,19 +177,21 @@ app.get('/', (req, res) => {
 
     /* ── Header ── */
     header {
-      background: var(--surface);
+      background: rgba(22, 24, 29, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
-      padding: 20px 40px;
+      padding: 16px 40px;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 20px;
       position: sticky;
       top: 0;
       z-index: 100;
     }
-    .logo-text { font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--accent); }
-    .logo-divider { width: 1px; height: 28px; background: var(--border); }
-    .header-title { font-size: 15px; color: var(--muted); font-weight: 400; }
+    .admin-logo { height: 26px; width: auto; object-fit: contain; filter: invert(1) opacity(0.85); }
+    .logo-divider { width: 1px; height: 24px; background: var(--border); }
+    .header-title { font-size: 14px; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
 
     /* ── Layout ── */
     .container { max-width: 820px; margin: 0 auto; padding: 40px 24px 0; }
@@ -197,16 +201,18 @@ app.get('/', (req, res) => {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 28px 32px;
+      padding: 32px;
       margin-bottom: 24px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .card-title {
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
-      letter-spacing: 1.5px;
+      letter-spacing: 2px;
       color: var(--accent);
       font-weight: 600;
       margin-bottom: 24px;
+      opacity: 0.9;
     }
 
     /* ── Form ── */
@@ -229,18 +235,20 @@ app.get('/', (req, res) => {
     }
     input[type="date"], input[type="text"], select {
       width: 100%;
-      background: rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.03);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 8px;
       color: var(--text);
       font-family: 'Inter', sans-serif;
-      font-size: 15px;
+      font-size: 14px;
       padding: 12px 16px;
-      transition: border-color 0.2s;
+      transition: var(--transition);
       outline: none;
     }
     input[type="date"]:focus, input[type="text"]:focus, select:focus {
       border-color: var(--accent);
+      background: rgba(255,255,255,0.05);
+      box-shadow: 0 0 0 3px rgba(214, 175, 55, 0.1);
     }
     input[type="date"]::-webkit-calendar-picker-indicator {
       filter: invert(0.6);
@@ -345,7 +353,7 @@ app.get('/', (req, res) => {
 <body>
 
 <header>
-  <div class="logo-text">VOLGO</div>
+  <img src="/assets/logo/volg-logo-main.png" alt="VOLGO" class="admin-logo">
   <div class="logo-divider"></div>
   <div class="header-title">Booking Admin — Availability Manager</div>
 </header>
