@@ -15,8 +15,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   
   <!-- Stylesheets -->
-  <script type="module" crossorigin src="/assets/index-BUaxyKSO.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DwikJlx2.css">
+  <script type="module" crossorigin src="/assets/index-DhDJkXpA.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-qPMlNJhu.css">
 </head>
 <body>
 
@@ -49,14 +49,50 @@
         </div>
       </header>
       
-      <div class="hero-content">
-        <h1 class="hero-title" id="heroTitle">Volgo Alpine Retreat</h1>
-        <p class="hero-tagline" id="heroTagline">A premium sanctuary nestled in pristine nature.</p>
-        
-        <button class="btn-primary cta-check-btn" id="heroCta">
-          <span>Check Availability</span>
-          <span class="material-symbols-outlined">calendar_today</span>
-        </button>
+      <div class="hero-content-wrapper">
+        <div class="hero-content">
+          <h1 class="hero-title" id="heroTitle">Volgo Alpine Retreat</h1>
+          <p class="hero-tagline" id="heroTagline">A premium sanctuary nestled in pristine nature.</p>
+          
+          <button class="btn-primary cta-check-btn" id="heroCta">
+            <span>Check Availability</span>
+            <span class="material-symbols-outlined">calendar_today</span>
+          </button>
+        </div>
+
+        <div class="hero-booking-form electric-border" id="bookingElectricBorder" style="--electric-border-color: #ffc800;">
+          <div class="eb-canvas-container">
+            <canvas class="eb-canvas" id="bookingCanvas"></canvas>
+          </div>
+          <div class="eb-layers">
+            <div class="eb-glow-1"></div>
+            <div class="eb-glow-2"></div>
+            <div class="eb-background-glow"></div>
+          </div>
+          <div class="eb-content">
+            <h2 class="booking-form-title">Complete Your Booking</h2>
+            <div class="booking-action-bar">
+              <div class="booking-contact-inputs">
+                <div class="input-group">
+                  <label for="guestName">Full Name</label>
+                  <input type="text" id="guestName" placeholder="John Doe" required />
+                </div>
+                <div class="input-group">
+                  <label for="guestPhone">WhatsApp Number</label>
+                  <input type="tel" id="guestPhone" placeholder="+919876543210" pattern="^\+?[0-9]{10,15}$" title="Please enter a valid phone number (10-15 digits), optionally starting with +" required />
+                </div>
+              </div>
+              <div class="booking-note-container">
+                <label for="bookingNote" class="booking-note-label">Request Note (Optional)</label>
+                <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
+              </div>
+              <button class="btn-primary btn-book" id="whatsappBookBtn" disabled>
+                <span>Request Booking</span>
+              </button>
+              <div class="booking-notice">Payment in person during check-in. No advance needed.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -155,26 +191,7 @@
               <!-- Calendar rendered here -->
             </div>
             
-            <div class="booking-action-bar">
-              <div class="booking-contact-inputs">
-                <div class="input-group">
-                  <label for="guestName">Full Name</label>
-                  <input type="text" id="guestName" placeholder="John Doe" required />
-                </div>
-                <div class="input-group">
-                  <label for="guestPhone">WhatsApp Number</label>
-                  <input type="tel" id="guestPhone" placeholder="+919876543210" pattern="^\+?[0-9]{10,15}$" title="Please enter a valid phone number (10-15 digits), optionally starting with +" required />
-                </div>
-              </div>
-              <div class="booking-note-container">
-                <label for="bookingNote" class="booking-note-label">Request Note (Optional)</label>
-                <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
-              </div>
-              <button class="btn-primary btn-book" id="whatsappBookBtn" disabled>
-                <span>Request Booking</span>
-              </button>
-              <div class="booking-notice">Payment in person during check-in. No advance needed.</div>
-            </div>
+            <!-- Booking form was moved to the left pane -->
           </div>
           
           <!-- TAB: Contact -->
