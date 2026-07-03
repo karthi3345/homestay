@@ -521,6 +521,18 @@ app.get('/admin', (req, res) => {
     `<option value="${p.id}">${p.name}</option>`
   ).join('');
 
+  let calendarStyles = '';
+  let calendarJs = '';
+  try {
+    const stylesCss = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf-8');
+    calendarJs = fs.readFileSync(path.join(__dirname, 'calendar.js'), 'utf-8');
+    const startIdx = stylesCss.indexOf('/* Tab: Calendar styling */');
+    const endIdx = stylesCss.indexOf('/* Booking Action Area */');
+    if (startIdx !== -1 && endIdx !== -1) {
+      calendarStyles = stylesCss.substring(startIdx, endIdx);
+    }
+  } catch(e) {}
+
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -529,6 +541,8 @@ app.get('/admin', (req, res) => {
   <title>Volgo Homestay — Booking Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    ${calendarStyles}
+    #adminCalendar .selection-summary, #adminCalendar .guest-selector-container { display: none !important; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -747,11 +761,17 @@ app.get('/admin', (req, res) => {
     </button>
   </div>
 
-  <!-- Currently blocked periods -->
-  <div class="card">
-    <div class="card-title">Currently Blocked Periods</div>
-    <div id="periodsList" class="periods-list">
-      <div class="empty-state">Loading...</div>
+  <!-- Current Blocking -->
+  <div class="card" style="display:flex; gap: 40px; align-items:flex-start;">
+    <div style="flex: 1;">
+      <h2 class="card-title">Currently Blocked Periods</h2>
+      <div id="periodsList">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+    <div style="width: 320px;">
+      <h2 class="card-title">Visual Calendar</h2>
+      <div id="adminCalendar"></div>
     </div>
   </div>
 
@@ -760,6 +780,7 @@ app.get('/admin', (req, res) => {
 <div id="toast"></div>
 
 <script>
+  ${calendarJs}
   function showToast(msg, type = 'success') {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -874,6 +895,22 @@ app.get('/admin', (req, res) => {
           \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${i})">Remove</button>\`}
         </div>
       \`).join('');
+
+    // Update Visual Calendar
+    const blockedDates = [];
+    periods.forEach(p => {
+      const d = new Date(p.from);
+      const end = new Date(p.to);
+      while (d < end) {
+        blockedDates.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+        d.setDate(d.getDate() + 1);
+      }
+    });
+    if (window.adminCal) {
+      window.adminCal.setBookedDates(blockedDates);
+    } else if (window.HomestayCalendar) {
+      window.adminCal = new HomestayCalendar('adminCalendar', { bookedDates: blockedDates });
+    }
   }
 
   async function addPeriod(force = false) {

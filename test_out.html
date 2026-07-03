@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Volgo Homestay — Booking Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Tab: Calendar styling */
+.calendar-wrapper {
+  max-width: 340px;
+  margin: 0 auto;
+}
+
+.calendar-container {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.calendar-header button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.calendar-header button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-accent);
+}
+
+.calendar-month-year {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border-radius: 50%;
+  cursor: default;
+  position: relative;
+  transition: var(--transition-fast);
+  font-weight: 400;
+}
+
+.calendar-day.empty-day {
+  color: rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.calendar-day.unavailable {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.calendar-day.available {
+  cursor: pointer;
+  color: var(--color-text-primary);
+}
+
+.calendar-day.available:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-accent);
+}
+
+/* cap-blocked: dates beyond a booked gap after check-in.
+   Still clickable (resets check-in), just visually dimmed. */
+.calendar-day.cap-blocked {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  opacity: 0.4;
+}
+
+.calendar-day.cap-blocked:hover {
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Range Highlights */
+.calendar-day.selected-start {
+  background: var(--color-accent) !important;
+  color: #000 !important;
+  font-weight: 600;
+  border-radius: 50%;
+}
+
+.calendar-day.selected-end {
+  background: var(--color-accent) !important;
+  color: #000 !important;
+  font-weight: 600;
+  border-radius: 50%;
+}
+
+.calendar-day.in-range {
+  background: rgba(214, 175, 55, 0.15);
+  color: var(--color-accent);
+  border-radius: 0;
+}
+
+.calendar-day.hover-range {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+}
+
+.calendar-day.hover-end {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  color: var(--color-accent);
+}
+
+/* Selection Summary */
+.selection-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.date-summary-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.summary-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Guest Selector */
+.guest-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.guest-selector {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.guest-label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.guest-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.guest-controls button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guest-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.guest-count {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 14px;
+  text-align: center;
+}
+
+
+    #adminCalendar .selection-summary, #adminCalendar .guest-selector-container { display: none !important; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0e11;
+      --surface:  #16181d;
+      --border:   rgba(255,255,255,0.08);
+      --accent:   #d6af37;
+      --accent2:  #f0cc60;
+      --text:     #f0f0f0;
+      --muted:    #7a7a8a;
+      --danger:   #e05555;
+      --success:  #4caf87;
+      --radius:   14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo-text { font-size: 22px; font-weight: 700; letter-spacing: 3px; color: var(--accent); }
+    .logo-divider { width: 1px; height: 28px; background: var(--border); }
+    .header-title { font-size: 15px; color: var(--muted); font-weight: 400; }
+
+    /* ── Layout ── */
+    .container { max-width: 820px; margin: 0 auto; padding: 40px 24px 0; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+    .card-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    /* ── Pending Requests ── */
+    .request-card {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .request-card:hover { border-color: rgba(255,255,255,0.15); }
+    .request-header { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
+    .request-guest { font-weight: 600; font-size: 16px; color: var(--accent2); }
+    .request-prop { color: var(--muted); font-size: 13px; }
+    .request-dates { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+    .request-details { font-size: 13px; color: #a0a0a0; margin-bottom: 12px; }
+    .request-note { font-size: 13px; font-style: italic; color: #d0d0d0; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid var(--accent); }
+    .request-actions { display: flex; gap: 12px; }
+    .btn-approve { background: var(--success); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-decline { background: rgba(224,85,85,0.2); color: var(--danger); border: 1px solid var(--danger); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-whatsapp { background: #25d366; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; }
+
+    /* ── Form ── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .form-row.full { grid-template-columns: 1fr; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    input[type="date"], input[type="text"], select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      padding: 12px 16px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+    input[type="date"]:focus, input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+    select option { background: #1e2028; }
+
+    /* ── Button ── */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 28px; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: #000; width: 100%; justify-content: center; margin-top: 8px; }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 24px; font-size: 14px; opacity: 0; transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 999; pointer-events: none; white-space: nowrap; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.success { border-color: var(--success); color: var(--success); }
+    #toast.error   { border-color: var(--danger);  color: var(--danger); }
+
+    /* ── Periods List ── */
+    .periods-list { display: flex; flex-direction: column; gap: 10px; }
+    .period-row { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; transition: border-color 0.2s; }
+    .period-row:hover { border-color: rgba(255,255,255,0.15); }
+    .period-dates { font-size: 15px; font-weight: 500; }
+    .period-duration { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .period-note { font-size: 12px; color: var(--accent); margin-top: 2px; }
+    .btn-delete { background: transparent; border: 1px solid rgba(224,85,85,0.3); color: var(--danger); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; }
+    .btn-delete:hover { background: rgba(224,85,85,0.1); border-color: var(--danger); }
+    .empty-state { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-text">VOLGO</div>
+  <div class="logo-divider"></div>
+  <div class="header-title">Booking Admin — Availability Manager</div>
+</header>
+
+<div class="container">
+  
+  <!-- PENDING REQUESTS -->
+  <div class="card" style="border-top: 2px solid var(--accent);">
+    <div class="card-title">Pending Booking Requests</div>
+    <div id="pendingList">
+      <div class="empty-state">Loading requests...</div>
+    </div>
+  </div>
+
+  <!-- Property selector -->
+  <div class="card">
+    <div class="card-title">Property</div>
+    <div class="form-row full">
+      <div>
+        <label>Select Property</label>
+        <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal();">
+          <option value="volgo-alpine-retreat">Volgo Alpine Retreat</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- External Calendar Sync -->
+  <div class="card">
+    <div class="card-title">External Calendar Sync</div>
+    
+    <div class="form-row">
+      <div style="flex:1">
+        <label>Platform Name</label>
+        <input type="text" id="feedName" placeholder="e.g. Airbnb">
+      </div>
+      <div style="flex:2">
+        <label>iCal URL</label>
+        <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addExternalIcal()">
+      ⊕ &nbsp; Add Calendar
+    </button>
+
+    <div style="margin-top:24px;">
+      <label>Configured Calendars (Auto-sync every 15 mins)</label>
+      <div id="feedsList" class="periods-list">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Block new dates -->
+  <div class="card">
+    <div class="card-title">Manual Block Dates</div>
+    <div class="form-row">
+      <div>
+        <label>Check-in Date</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div>
+        <label>Check-out Date</label>
+        <input type="date" id="toDate">
+      </div>
+    </div>
+    <div class="form-row full">
+      <div>
+        <label>Note (optional — for your reference only)</label>
+        <input type="text" id="noteInput" placeholder="e.g. Family from Chennai, 3 nights">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="addPeriod()">
+      ⊕ &nbsp; Block These Dates
+    </button>
+  </div>
+
+  <!-- Current Blocking -->
+  <div class="card" style="display:flex; gap: 40px; align-items:flex-start;">
+    <div style="flex: 1;">
+      <h2 class="card-title">Currently Blocked Periods</h2>
+      <div id="periodsList">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+    <div style="width: 320px;">
+      <h2 class="card-title">Visual Calendar</h2>
+      <div id="adminCalendar"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    setTimeout(() => { t.className = ''; }, 3000);
+  }
+
+  function nights(from, to) {
+    const ms = new Date(to) - new Date(from);
+    const n  = Math.round(ms / 86400000);
+    return n === 1 ? '1 night' : n + ' nights';
+  }
+
+  function fmtDate(str) {
+    return new Date(str + 'T00:00:00').toLocaleDateString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric'
+    });
+  }
+
+  function getPropertyId() { return document.getElementById('propertySelect').value; }
+
+  let pendingDataCache = [];
+  
+  async function loadPendingRequests() {
+    const res = await fetch('/api/pending-requests');
+    const requests = await res.json();
+    pendingDataCache = requests;
+    const list = document.getElementById('pendingList');
+    
+    if (!requests.length) {
+      list.innerHTML = '<div class="empty-state">No pending requests right now.</div>';
+      return;
+    }
+    
+    list.innerHTML = requests.map(r => {
+      const wNumber = r.guestPhone.replace(/[^+\d]/g, '');
+      const d1 = new Date(r.checkInMs).toLocaleDateString();
+      const d2 = new Date(r.checkOutMs).toLocaleDateString();
+      
+      const overlapBadge = r.hasOverlap ? `<div style="color:var(--danger); font-size:12px; font-weight:600; margin-bottom:8px;">⚠️ Overlaps with another pending request!</div>` : '';
+      
+      return `
+        <div class="request-card">
+          <div class="request-header">
+            <div>
+              <span class="request-guest">${r.guestName}</span>
+              <span style="font-size:11px; color:var(--muted); margin-left:8px;">${r.id || ''}</span>
+            </div>
+            <span class="request-prop">${r.homestayName}</span>
+          </div>
+          ${overlapBadge}
+          <div class="request-dates">${d1} → ${d2}</div>
+          <div class="request-details">${r.adults} Adults, ${r.children} Children | Phone: ${r.guestPhone}</div>
+          ${r.note ? `<div class="request-note">"${r.note}"</div>` : ''}
+          <div class="request-actions">
+            <button class="btn-approve" id="approve-${r.id}" onclick="approveRequest('${r.id}', this)">Approve</button>
+            <button class="btn-decline" id="decline-${r.id}" onclick="declineRequest('${r.id}', this)">Decline</button>
+            <a class="btn-whatsapp" href="https://wa.me/${wNumber}?text=Hi ${r.guestName}, regarding your booking at ${r.homestayName}..." target="_blank">WhatsApp</a>
+            <a href="tel:${wNumber}" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--text); text-decoration: none; font-size: 13px;">Call</a>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  async function approveRequest(id, btn) {
+    const reqObj = pendingDataCache.find(r => r.id === id);
+    if (!reqObj) return;
+    const d1 = new Date(reqObj.checkInMs).toLocaleDateString();
+    const d2 = new Date(reqObj.checkOutMs).toLocaleDateString();
+    const msg = 'Confirm Booking?\n\nGuest: ' + reqObj.guestName + '\nDates: ' + d1 + ' - ' + d2 + '\n\nThis action will block these dates.';
+    if (!confirm(msg)) return;
+    
+    const orig = btn.textContent;
+    btn.textContent = '...'; btn.disabled = true;
+    const res = await fetch('/api/approve-request/' + id, { method: 'POST' });
+    if (res.ok) { showToast('Approved!'); loadPendingRequests(); loadPeriods(); }
+    else { 
+      const err = await res.json();
+      btn.textContent = orig; btn.disabled = false; 
+      alert(err.error || 'Error'); 
+    }
+  }
+  
+  async function declineRequest(id, btn) {
+    if (!confirm('Decline?')) return;
+    const orig = btn.textContent;
+    btn.textContent = '...'; btn.disabled = true;
+    const res = await fetch('/api/decline-request/' + id, { method: 'DELETE' });
+    if (res.ok) { showToast('Declined'); loadPendingRequests(); }
+    else { btn.textContent = orig; btn.disabled = false; }
+  }
+
+  async function loadPeriods() {
+    const pid = getPropertyId();
+    const res = await fetch('/api/periods/' + pid);
+    const periods = await res.json();
+    const list = document.getElementById('periodsList');
+
+    if (!periods.length) {
+      list.innerHTML = '<div class="empty-state">No dates blocked yet.</div>';
+      return;
+    }
+
+    list.innerHTML = periods.map((p, i) => `
+        <div class="period-row">
+          <div>
+            <div class="period-dates">${fmtDate(p.from)} &nbsp;→&nbsp; ${fmtDate(p.to)}</div>
+            <div class="period-duration">${nights(p.from, p.to)}</div>
+            ${p.note ? `<div class="period-note">${p.note}</div>` : ''}
+          </div>
+          ${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : `<button class="btn-delete" onclick="removePeriod(${i})">Remove</button>`}
+        </div>
+      `).join('');
+
+    // Update Visual Calendar
+    const blockedDates = [];
+    periods.forEach(p => {
+      const d = new Date(p.from);
+      const end = new Date(p.to);
+      while (d < end) {
+        blockedDates.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+        d.setDate(d.getDate() + 1);
+      }
+    });
+    if (window.adminCal) {
+      window.adminCal.setBookedDates(blockedDates);
+    } else if (window.HomestayCalendar) {
+      window.adminCal = new HomestayCalendar('adminCalendar', { bookedDates });
+    }
+  }
+
+  async function addPeriod(force = false) {
+    const from = document.getElementById('fromDate').value;
+    const to = document.getElementById('toDate').value;
+    const note = document.getElementById('noteInput').value;
+    if (!from || !to) return showToast('Please select dates', 'error');
+    
+    let url = '/api/periods/' + getPropertyId();
+    if (force) url += '?force=true';
+    
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, note })
+    });
+    
+    if (res.status === 409) {
+      const err = await res.json();
+      if (err.error === 'OVERLAP_PENDING') {
+        if (confirm(err.msg)) addPeriod(true);
+        return;
+      }
+      return showToast(err.error || 'Conflict', 'error');
+    }
+    
+    if (res.ok) {
+      showToast('Dates blocked');
+      document.getElementById('fromDate').value = '';
+      document.getElementById('toDate').value = '';
+      document.getElementById('noteInput').value = '';
+      loadPeriods();
+    }
+  }
+
+  async function removePeriod(index) {
+    if (!confirm('Remove this blocked period?')) return;
+    const res  = await fetch('/api/periods/' + getPropertyId() + '/' + index, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Dates unblocked');
+      loadPeriods();
+    }
+  }
+
+  async function loadExternalIcal() {
+    const pid = getPropertyId();
+    const res = await fetch('/api/external-ical/' + pid);
+    const list = document.getElementById('feedsList');
+    if (!res.ok) { list.innerHTML = '<div class="empty-state">Failed to load</div>'; return; }
+    const data = await res.json();
+    const feeds = data.feeds || [];
+    
+    if (!feeds.length) {
+      list.innerHTML = '<div class="empty-state">No external calendars configured.</div>';
+      return;
+    }
+    
+    list.innerHTML = feeds.map(f => {
+      const d = f.lastSync ? new Date(f.lastSync).toLocaleString() : 'Never';
+      const statusBadge = f.status === 'Success' 
+        ? '<span style="color:var(--success)">✓ Success</span>' 
+        : (f.status === 'Failed' ? '<span style="color:var(--danger)">❌ Failed</span>' : '<span>⏳ Pending</span>');
+        
+      return '<div class="period-row" style="opacity: ' + (f.enabled ? '1' : '0.5') + '">' +
+               '<div>' +
+                 '<div class="period-dates">' + f.name + '</div>' +
+                 '<div class="period-duration" style="font-family:monospace; margin-top:5px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px;">' + f.url + '</div>' +
+                 '<div class="period-note">Last Sync: ' + d + ' &nbsp;|&nbsp; ' + statusBadge + '</div>' +
+               '</div>' +
+               '<div style="display:flex; gap:8px;">' +
+                 '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="syncFeed(\'' + f.id + '\')">Sync</button>' +
+                 '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="toggleFeed(\'' + f.id + '\')">' + (f.enabled ? 'Disable' : 'Enable') + '</button>' +
+                 '<button class="btn-delete" onclick="removeFeed(\'' + f.id + '\')">Remove</button>' +
+               '</div>' +
+             '</div>';
+    }).join('');
+  }
+
+  async function addExternalIcal() {
+    const pid = getPropertyId();
+    const name = document.getElementById('feedName').value;
+    const url = document.getElementById('feedUrl').value;
+    if (!name || !url) return showToast('Please enter a name and URL', 'error');
+    
+    const btn = event.currentTarget;
+    const orig = btn.innerHTML;
+    btn.innerHTML = 'Adding...'; btn.disabled = true;
+    
+    const res = await fetch('/api/external-ical/' + pid + '/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url })
+    });
+    
+    btn.innerHTML = orig; btn.disabled = false;
+    if (res.ok) {
+      showToast('Calendar Added & Synced!');
+      document.getElementById('feedName').value = '';
+      document.getElementById('feedUrl').value = '';
+      loadExternalIcal();
+      loadPeriods();
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Failed to add', 'error');
+    }
+  }
+
+  async function toggleFeed(feedId) {
+    await fetch('/api/external-ical/' + getPropertyId() + '/toggle/' + feedId, { method: 'POST' });
+    loadExternalIcal();
+    loadPeriods();
+  }
+
+  async function removeFeed(feedId) {
+    if (!confirm('Remove this calendar feed?')) return;
+    await fetch('/api/external-ical/' + getPropertyId() + '/' + feedId, { method: 'DELETE' });
+    loadExternalIcal();
+    loadPeriods();
+  }
+
+  async function syncFeed(feedId) {
+    showToast('Syncing feed...');
+    const res = await fetch('/api/external-ical/' + getPropertyId() + '/sync/' + feedId, { method: 'POST' });
+    if (res.ok) {
+      showToast('Sync complete!');
+      loadExternalIcal();
+      loadPeriods();
+    } else {
+      showToast('Sync failed', 'error');
+    }
+  }
+
+  loadPeriods();
+  loadExternalIcal();
+  loadPendingRequests();
+</script>
+<script>
+  /**
+ * HomestayCalendar
+ * Clean, simple date picker matching Airbnb/Booking.com UX:
+ * - Click 1: sets check-in
+ * - Click 2: sets check-out (if no booked dates in range)
+ * - If booked dates are in between, reset to new check-in
+ * - Clicking again after both dates are selected resets everything
+ */
+class HomestayCalendar {
+  constructor(containerId, options = {}) {
+    this.container = document.getElementById(containerId);
+    if (!this.container) return;
+
+    this.bookedDates   = new Set(options.bookedDates || []);
+    this.onSelectionChange = options.onSelectionChange || (() => {});
+
+    // Show current month
+    const now = new Date();
+    this.viewYear   = now.getFullYear();
+    this.viewMonth  = now.getMonth();
+    // Lock: cannot navigate before this month
+    this.minYear    = now.getFullYear();
+    this.minMonth   = now.getMonth();
+
+    this.checkIn   = null; // Date object
+    this.checkOut  = null; // Date object
+    this.hoverDate = null; // Date object (for range preview)
+    this.adults    = 2;
+    this.children  = 0;
+    this.maxGuests = options.maxGuests || 6;
+
+    this._build();
+  }
+
+  /* ─────────────────────────────── public API ─── */
+
+  setBookedDates(dates) {
+    this.bookedDates = new Set(dates);
+    this._drawGrid();
+  }
+
+  setMaxGuests(max) {
+    this.maxGuests = max;
+    if (this.adults + this.children > max) {
+      this.children = Math.max(0, max - this.adults);
+      if (this.adults + this.children > max) {
+        this.adults = max;
+      }
+    }
+    this._drawGuests();
+  }
+
+  /* ─────────────────────────────── build DOM ─── */
+
+  _build() {
+    this.container.innerHTML = `
+      <div class="calendar-wrapper">
+        <div class="calendar-header">
+          <button type="button" class="btn-cal-prev" aria-label="Previous month">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor"/></svg>
+          </button>
+          <span class="calendar-month-year"></span>
+          <button type="button" class="btn-cal-next" aria-label="Next month">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill="currentColor"/></svg>
+          </button>
+        </div>
+
+        <div class="calendar-weekdays">
+          <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+        </div>
+
+        <div class="calendar-grid"></div>
+
+        <div class="selection-summary">
+          <div class="date-summary-box">
+            <div class="summary-label">Check-in</div>
+            <div class="summary-value checkin-val">Select date</div>
+          </div>
+          <div class="date-summary-box">
+            <div class="summary-label">Check-out</div>
+            <div class="summary-value checkout-val">Select date</div>
+          </div>
+        </div>
+
+        <div class="guest-selector-container"></div>
+      </div>
+    `;
+
+    this._drawGrid();
+    this._drawGuests();
+    this._attachEvents();
+  }
+
+  /* ─────────────────────────────── render grid ─── */
+
+  _drawGrid() {
+    const label = this.container.querySelector('.calendar-month-year');
+    const grid  = this.container.querySelector('.calendar-grid');
+
+    const MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+
+    label.textContent = `${MONTHS[this.viewMonth]} ${this.viewYear}`;
+    grid.innerHTML = '';
+
+    // Disable prev button when on current month
+    if (this._btnPrev) {
+      const atMin = this.viewYear === this.minYear && this.viewMonth === this.minMonth;
+      this._btnPrev.disabled = atMin;
+      this._btnPrev.style.opacity = atMin ? '0.25' : '1';
+      this._btnPrev.style.cursor  = atMin ? 'not-allowed' : 'pointer';
+    }
+
+    const today   = this._midnight(new Date());
+    const firstWd = new Date(this.viewYear, this.viewMonth, 1).getDay();
+    const daysIn  = new Date(this.viewYear, this.viewMonth + 1, 0).getDate();
+    const prevEnd = new Date(this.viewYear, this.viewMonth, 0).getDate();
+
+    const ciMs = this.checkIn  ? this.checkIn.getTime()  : null;
+    const coMs = this.checkOut ? this.checkOut.getTime() : null;
+    const hvMs = this.hoverDate ? this.hoverDate.getTime() : null;
+
+    // Determine the first booked date strictly after check-in (for range cap)
+    let capMs = null;
+    if (ciMs && !coMs) {
+      for (const s of this.bookedDates) {
+        const t = this._strToMs(s);
+        if (t > ciMs && (capMs === null || t < capMs)) capMs = t;
+      }
+    }
+
+    // Filler cells from previous month
+    for (let i = firstWd; i > 0; i--) {
+      const el = document.createElement('div');
+      el.className = 'calendar-day empty-day';
+      el.textContent = prevEnd - i + 1;
+      grid.appendChild(el);
+    }
+
+    // Actual day cells
+    for (let d = 1; d <= daysIn; d++) {
+      const date   = this._midnight(new Date(this.viewYear, this.viewMonth, d));
+      const ms     = date.getTime();
+      const dateStr = this._fmt(date);
+      // Disable past dates, today, and dates > 365 days in future
+      const isPast   = ms <= today.getTime();
+      const isTooFar = ms > today.getTime() + (365 * 24 * 60 * 60 * 1000);
+      const isBooked = this.bookedDates.has(dateStr);
+
+      const el = document.createElement('div');
+      el.className = 'calendar-day';
+      el.textContent = d;
+      el.dataset.date = dateStr;
+      el.dataset.ms   = ms;
+
+      if (isPast || isTooFar || isBooked) {
+        // Hard disabled: past, today, too far, or booked
+        el.classList.add('unavailable');
+      } else if (capMs !== null && ms >= capMs) {
+        // Soft disabled: beyond a booked cap after check-in
+        // Still clickable (resets check-in), but styled as unavailable
+        el.classList.add('cap-blocked');
+      } else {
+        el.classList.add('available');
+
+        // Apply selection highlights
+        if (ciMs && ms === ciMs)  el.classList.add('selected-start');
+        if (coMs && ms === coMs)  el.classList.add('selected-end');
+        if (ciMs && coMs && ms > ciMs && ms < coMs) el.classList.add('in-range');
+        if (ciMs && !coMs) {
+          if (hvMs && ms > ciMs && ms < hvMs) el.classList.add('hover-range');
+          if (hvMs && ms === hvMs) el.classList.add('hover-range', 'hover-end');
+        }
+      }
+
+      grid.appendChild(el);
+    }
+
+    this._drawSummary();
+  }
+
+  /* ─────────────────────────────── render guests ─── */
+
+  _drawGuests() {
+    const el = this.container.querySelector('.guest-selector-container');
+    const total = this.adults + this.children;
+    el.innerHTML = `
+      <div class="guest-selector">
+        <span class="guest-label">Adults</span>
+        <div class="guest-controls">
+          <button type="button" class="btn-adult-dec"${this.adults <= 1 ? ' disabled' : ''}>−</button>
+          <span class="guest-count">${this.adults}</span>
+          <button type="button" class="btn-adult-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
+        </div>
+      </div>
+      <div class="guest-selector">
+        <span class="guest-label">Children</span>
+        <div class="guest-controls">
+          <button type="button" class="btn-child-dec"${this.children <= 0 ? ' disabled' : ''}>−</button>
+          <span class="guest-count">${this.children}</span>
+          <button type="button" class="btn-child-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
+        </div>
+      </div>
+    `;
+  }
+
+  _drawSummary() {
+    const ci = this.container.querySelector('.checkin-val');
+    const co = this.container.querySelector('.checkout-val');
+    if (ci) ci.textContent = this.checkIn  ? this._display(this.checkIn)  : 'Select date';
+    if (co) co.textContent = this.checkOut ? this._display(this.checkOut) : 'Select date';
+  }
+
+  /* ─────────────────────────────── events ─── */
+
+  _attachEvents() {
+    // Month navigation
+    this._btnPrev = this.container.querySelector('.btn-cal-prev');
+    this._btnNext = this.container.querySelector('.btn-cal-next');
+
+    this._btnPrev.addEventListener('click', () => {
+      // Don't go before the current real-world month
+      if (this.viewYear === this.minYear && this.viewMonth === this.minMonth) return;
+      if (this.viewMonth === 0) { this.viewMonth = 11; this.viewYear--; }
+      else this.viewMonth--;
+      this._drawGrid();
+    });
+
+    this._btnNext.addEventListener('click', () => {
+      if (this.viewMonth === 11) { this.viewMonth = 0; this.viewYear++; }
+      else this.viewMonth++;
+      this._drawGrid();
+    });
+
+    const grid = this.container.querySelector('.calendar-grid');
+
+    // Click: date selection
+    grid.addEventListener('click', (e) => {
+      const cell = e.target.closest('.calendar-day');
+      if (!cell || cell.classList.contains('empty-day') || cell.classList.contains('unavailable')) return;
+
+      const ms   = Number(cell.dataset.ms);
+      const date = new Date(ms);
+
+      if (!this.checkIn || (this.checkIn && this.checkOut)) {
+        // State A → No selection or both selected: start fresh
+        this.checkIn  = date;
+        this.checkOut = null;
+      } else {
+        // State B → Check-in set, picking check-out
+        if (ms <= this.checkIn.getTime()) {
+          // Clicked same or earlier date: move check-in
+          this.checkIn  = date;
+          this.checkOut = null;
+        } else if (this._hasBookedBetween(this.checkIn, date)) {
+          // Booked gap in range: reset check-in to clicked date
+          this.checkIn  = date;
+          this.checkOut = null;
+        } else {
+          // Valid check-out
+          this.checkOut = date;
+        }
+      }
+
+      this.hoverDate = null;
+      this._drawGrid();
+      this._notify();
+    });
+
+    // Hover: range preview
+    grid.addEventListener('mousemove', (e) => {
+      if (!this.checkIn || this.checkOut) return;
+      const cell = e.target.closest('.calendar-day.available');
+      if (!cell) { this._clearHover(); return; }
+      const ms = Number(cell.dataset.ms);
+      if (ms <= this.checkIn.getTime()) { this._clearHover(); return; }
+      if (ms === (this.hoverDate ? this.hoverDate.getTime() : null)) return; // no change
+      this.hoverDate = new Date(ms);
+      this._drawGrid();
+    });
+
+    grid.addEventListener('mouseleave', () => this._clearHover());
+
+    // Guest controls (event delegation on container)
+    this.container.addEventListener('click', (e) => {
+      const total = this.adults + this.children;
+
+      if (e.target.classList.contains('btn-adult-inc') && total < this.maxGuests) {
+        this.adults++;
+        this._drawGuests();
+        this._notify();
+      } else if (e.target.classList.contains('btn-adult-dec') && this.adults > 1) {
+        this.adults--;
+        this._drawGuests();
+        this._notify();
+      } else if (e.target.classList.contains('btn-child-inc') && total < this.maxGuests) {
+        this.children++;
+        this._drawGuests();
+        this._notify();
+      } else if (e.target.classList.contains('btn-child-dec') && this.children > 0) {
+        this.children--;
+        this._drawGuests();
+        this._notify();
+      }
+    });
+  }
+
+  _clearHover() {
+    if (this.hoverDate) {
+      this.hoverDate = null;
+      this._drawGrid();
+    }
+  }
+
+  /* ─────────────────────────────── helpers ─── */
+
+  _midnight(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  _fmt(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  _strToMs(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+
+  _display(date) {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  _hasBookedBetween(start, end) {
+    // Checks for any booked date strictly between start (exclusive) and end (exclusive)
+    const startMs = start.getTime();
+    const endMs   = end.getTime();
+    for (const s of this.bookedDates) {
+      const t = this._strToMs(s);
+      if (t > startMs && t < endMs) return true;
+    }
+    return false;
+  }
+
+  _notify() {
+    this.onSelectionChange({
+      checkIn:  this.checkIn,
+      checkOut: this.checkOut,
+      adults:   this.adults,
+      children: this.children
+    });
+  }
+}
+
+window.HomestayCalendar = HomestayCalendar;
+
+</script>
+</body>
+</html>
