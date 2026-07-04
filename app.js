@@ -678,38 +678,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const checkOutStr = checkOut.toLocaleDateString('en-US', options);
       
       // Price calculation
-      let totalNights = 0;
-      let weekdayNights = 0;
-      let weekendNights = 0;
-      
-      const priceContainer = document.getElementById('priceSummaryContainer');
-      const textEl = document.getElementById('priceBreakdownText');
-      const textAmtEl = document.getElementById('priceBreakdownAmount');
-      const totalAmtEl = document.getElementById('priceTotalAmount');
-
-      if (currentHomestay && currentHomestay.pricing && currentHomestay.pricing.weekday) {
-        let currentDate = new Date(checkIn);
-        while (currentDate < checkOut) {
-          totalNights++;
-          const day = currentDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
-          if (day === 5 || day === 6) weekendNights++;
-          else weekdayNights++;
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        const wdPrice = currentHomestay.pricing.weekday;
-        const wePrice = currentHomestay.pricing.weekend || wdPrice;
-        const total = (weekdayNights * wdPrice) + (weekendNights * wePrice);
-
-        let breakdownText = [];
-        if (weekdayNights > 0) breakdownText.push(`${weekdayNights} Weeknight${weekdayNights > 1 ? 's' : ''}`);
-        if (weekendNights > 0) breakdownText.push(`${weekendNights} Weekend Night${weekendNights > 1 ? 's' : ''}`);
-        
-        textEl.textContent = breakdownText.join(', ');
-        textAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
-        totalAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
-        if (priceContainer) priceContainer.style.display = 'block';
-      }
+      // Call updatePriceDisplay which now handles total and promo calculation
+      if (window.updatePriceDisplay) window.updatePriceDisplay();
       
       const waNumber = currentHomestay.whatsapp.replace(/[^+\d]/g, '');
       
@@ -865,6 +835,103 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // Real-time price calculation logic
+  window.updatePriceDisplay = function() {
+    if (!calendarInstance || !calendarInstance.checkIn || !calendarInstance.checkOut) return;
+    
+    const checkIn = calendarInstance.checkIn;
+    const checkOut = calendarInstance.checkOut;
+    
+    let totalNights = 0;
+    let weekdayNights = 0;
+    let weekendNights = 0;
+    
+    const priceContainer = document.getElementById('priceSummaryContainer');
+    const textEl = document.getElementById('priceBreakdownText');
+    const textAmtEl = document.getElementById('priceBreakdownAmount');
+    const totalAmtEl = document.getElementById('priceTotalAmount');
+    const promoCodeEl = document.getElementById('promoCode');
+
+    if (currentHomestay && currentHomestay.pricing && currentHomestay.pricing.weekday) {
+      let currentDate = new Date(checkIn);
+      while (currentDate < checkOut) {
+        totalNights++;
+        const day = currentDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+        if (day === 5 || day === 6) weekendNights++;
+        else weekdayNights++;
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      const wdPrice = currentHomestay.pricing.weekday;
+      const wePrice = currentHomestay.pricing.weekend || wdPrice;
+      let total = (weekdayNights * wdPrice) + (weekendNights * wePrice);
+
+      let breakdownText = [];
+      if (weekdayNights > 0) breakdownText.push(`${weekdayNights} Weeknight${weekdayNights > 1 ? 's' : ''}`);
+      if (weekendNights > 0) breakdownText.push(`${weekendNights} Weekend Night${weekendNights > 1 ? 's' : ''}`);
+      
+      textEl.textContent = breakdownText.join(', ');
+      textAmtEl.innerHTML = '₹' + total.toLocaleString('en-IN');
+      
+      let promoApplied = false;
+      let invalidPromo = false;
+      // Apply Promo Code Logic
+      if (promoCodeEl && currentHomestay.promos && currentHomestay.promos.length > 0) {
+        const enteredCode = promoCodeEl.value.trim().toLowerCase();
+        if (enteredCode) {
+          const matchedPromo = currentHomestay.promos.find(p => p.code.toLowerCase() === enteredCode);
+          if (matchedPromo && matchedPromo.discount > 0) {
+            const discountAmt = total * (matchedPromo.discount / 100);
+            total = total - discountAmt;
+            textAmtEl.innerHTML = `<span style="text-decoration: line-through; opacity: 0.6; margin-right: 8px;">₹${(total + discountAmt).toLocaleString('en-IN')}</span>` + 
+                                  `<span style="color: var(--success); font-size: 13px;">-${matchedPromo.discount}%</span>`;
+            promoApplied = true;
+          } else {
+            invalidPromo = true;
+          }
+        }
+      }
+
+      totalAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
+      if (priceContainer) priceContainer.style.display = 'block';
+      
+      return { promoApplied, invalidPromo };
+    }
+    return null;
+  };
+
+  // Listen for promo code apply button
+  const promoCodeInput = document.getElementById('promoCode');
+  const applyPromoBtn = document.getElementById('applyPromoBtn');
+  if (promoCodeInput && applyPromoBtn) {
+    applyPromoBtn.addEventListener('click', () => {
+      if (!calendarInstance || !calendarInstance.checkIn || !calendarInstance.checkOut) {
+        return alert('Please select your Check-In and Check-Out dates first.');
+      }
+      const result = window.updatePriceDisplay();
+      if (result) {
+        if (result.invalidPromo) {
+          alert('Invalid promo code.');
+        } else if (result.promoApplied) {
+          // Optional: slight visual feedback on the button
+          const originalText = applyPromoBtn.textContent;
+          applyPromoBtn.textContent = 'Applied!';
+          applyPromoBtn.style.backgroundColor = 'var(--success)';
+          setTimeout(() => {
+            applyPromoBtn.textContent = originalText;
+            applyPromoBtn.style.backgroundColor = '';
+          }, 2000);
+        }
+      }
+    });
+    promoCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyPromoBtn.click();
+      }
+    });
+  }
   
   // Guest Selector Triggers
   const btnAdultDec = document.getElementById('btnAdultDec');
@@ -906,14 +973,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // Disable booking button
       whatsappBookBtn.disabled = true;
       whatsappBookBtn.classList.remove('active');
+      whatsappBookBtn.onclick = null;
       
       // Clear calendar instance
-      if (window.calendarInstance) {
-        window.calendarInstance.checkIn = null;
-        window.calendarInstance.checkOut = null;
-        window.calendarInstance.hoverDate = null;
-        window.calendarInstance._drawGrid();
-        window.calendarInstance._notify();
+      if (calendarInstance) {
+        calendarInstance.checkIn = null;
+        calendarInstance.checkOut = null;
+        calendarInstance.hoverDate = null;
+        calendarInstance._drawGrid();
+        calendarInstance._notify();
       }
     });
   });

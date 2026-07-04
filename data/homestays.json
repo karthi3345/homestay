@@ -25,6 +25,12 @@
       "weekday": 2700,
       "weekend": 3700
     },
+    "promos": [
+      {
+        "code": "Mathi",
+        "discount": 10
+      }
+    ],
     "location": "2nd Floor, No. 11, Perumal Koil Street, Heritage Town",
     "mapEmbedUrl": "https://maps.google.com/maps?q=2nd%20Floor,%20No.%2011,%20Perumal%20Koil%20Street,%20Heritage%20Town&t=&z=16&ie=UTF8&iwloc=&output=embed",
     "phone": "+91 97517 18950",

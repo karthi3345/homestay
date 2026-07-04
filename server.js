@@ -219,7 +219,7 @@ app.get('/api/periods/:propertyId', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Update Pricing Endpoint
 app.post('/api/homestay/:id/pricing', (req, res) => {
-  const { weekday, weekend } = req.body;
+  const { weekday, weekend, promos } = req.body;
   if (typeof weekday !== 'number' || typeof weekend !== 'number') {
     return res.status(400).json({ error: 'Weekday and weekend prices must be numbers.' });
   }
@@ -229,6 +229,9 @@ app.post('/api/homestay/:id/pricing', (req, res) => {
     const record = data.find(b => b.id === req.params.id);
     if (record) {
       record.pricing = { weekday, weekend };
+      record.promos = Array.isArray(promos) ? promos : [];
+      // Clean up old single promo if it exists
+      if (record.promo) delete record.promo;
       fs.writeFileSync(HOMESTAYS_FILE, JSON.stringify(data, null, 2));
       return res.json({ success: true });
     }
@@ -783,8 +786,28 @@ app.get('/admin', (req, res) => {
         <input type="number" id="weekendPrice" placeholder="e.g. 6500">
       </div>
     </div>
-    <button class="btn btn-primary" onclick="updatePricing()">
-      💾 &nbsp; Save Pricing
+    <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
+      <div class="card-title" style="margin-bottom: 12px;">Active Promo Codes</div>
+      <div class="form-row" style="align-items: flex-end; margin-bottom: 16px;">
+        <div>
+          <label>New Promo Code</label>
+          <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20">
+        </div>
+        <div>
+          <label>Discount (%)</label>
+          <input type="number" id="newPromoDiscount" placeholder="e.g. 20">
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="addPromo()" style="width: 100%; height: 42px;">⊕ Add</button>
+        </div>
+      </div>
+      <div id="promoListContainer" class="periods-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+    
+    <button class="btn btn-primary" onclick="updatePricing()" style="margin-top: 24px; width: 100%;">
+      💾 &nbsp; Save All Pricing & Promos
     </button>
   </div>
 
@@ -1147,6 +1170,8 @@ app.get('/admin', (req, res) => {
     }
   }
 
+  let currentPromos = [];
+
   function loadPricing() {
     if (window.homestaysData) {
       const pid = getPropertyId();
@@ -1155,7 +1180,55 @@ app.get('/admin', (req, res) => {
         document.getElementById('weekdayPrice').value = prop.pricing.weekday;
         document.getElementById('weekendPrice').value = prop.pricing.weekend;
       }
+      currentPromos = [];
+      if (prop && prop.promos) {
+        currentPromos = JSON.parse(JSON.stringify(prop.promos)); // deep copy
+      } else if (prop && prop.promo && prop.promo.code) { // legacy fallback
+        currentPromos = [prop.promo];
+      }
+      renderPromos();
     }
+  }
+
+  function renderPromos() {
+    const container = document.getElementById('promoListContainer');
+    if (currentPromos.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding: 16px;">No promo codes active.</div>';
+      return;
+    }
+    container.innerHTML = currentPromos.map((p, index) => 
+      '<div class="period-row">' +
+        '<div>' +
+          '<span style="font-weight: 600; color: var(--accent); font-size: 15px;">' + p.code + '</span>' +
+          '<span style="color: var(--success); font-size: 13px; margin-left: 8px;">' + p.discount + '% OFF</span>' +
+        '</div>' +
+        '<button class="btn-delete" onclick="removePromo(' + index + ')">Remove</button>' +
+      '</div>'
+    ).join('');
+  }
+
+  function addPromo() {
+    const codeInput = document.getElementById('newPromoCode');
+    const discountInput = document.getElementById('newPromoDiscount');
+    const code = codeInput.value.trim();
+    const discount = parseFloat(discountInput.value);
+    
+    if (!code || isNaN(discount) || discount <= 0 || discount >= 100) {
+      return showToast('Please enter a valid code and discount between 1-99%', 'error');
+    }
+    if (currentPromos.find(p => p.code.toLowerCase() === code.toLowerCase())) {
+      return showToast('Promo code already exists', 'error');
+    }
+    
+    currentPromos.push({ code, discount });
+    codeInput.value = '';
+    discountInput.value = '';
+    renderPromos();
+  }
+
+  function removePromo(index) {
+    currentPromos.splice(index, 1);
+    renderPromos();
   }
   
   async function updatePricing() {
@@ -1170,16 +1243,19 @@ app.get('/admin', (req, res) => {
     const res = await fetch('/api/homestay/' + pid + '/pricing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekday, weekend })
+      body: JSON.stringify({ weekday, weekend, promos: currentPromos })
     });
     
     if (res.ok) {
-      showToast('Pricing updated successfully!');
+      showToast('Settings updated successfully!');
       // Update local data so it stays in sync
       const prop = window.homestaysData.find(p => p.id === pid);
-      if (prop) prop.pricing = { weekday, weekend };
+      if (prop) {
+        prop.pricing = { weekday, weekend };
+        prop.promos = JSON.parse(JSON.stringify(currentPromos));
+      }
     } else {
-      showToast('Failed to update pricing', 'error');
+      showToast('Failed to update settings', 'error');
     }
   }
 
