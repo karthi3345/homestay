@@ -749,32 +749,6 @@ app.get('/admin', (req, res) => {
     </div>
   </div>
 
-  <!-- External Calendar Sync -->
-  <div class="card">
-    <div class="card-title">External Calendar Sync</div>
-    
-    <div class="form-row">
-      <div style="flex:1">
-        <label>Platform Name</label>
-        <input type="text" id="feedName" placeholder="e.g. Airbnb">
-      </div>
-      <div style="flex:2">
-        <label>iCal URL</label>
-        <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
-      </div>
-    </div>
-    <button class="btn btn-primary" onclick="addExternalIcal()">
-      ⊕ &nbsp; Add Calendar
-    </button>
-
-    <div style="margin-top:24px;">
-      <label>Configured Calendars (Auto-sync every 15 mins)</label>
-      <div id="feedsList" class="periods-list">
-        <div class="empty-state">Loading...</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Block new dates -->
   <div class="card">
     <div class="card-title">Manual Block Dates</div>
@@ -797,6 +771,37 @@ app.get('/admin', (req, res) => {
     <button class="btn btn-primary" onclick="addPeriod()">
       ⊕ &nbsp; Block These Dates
     </button>
+  </div>
+
+  <!-- External Calendar Sync -->
+  <div class="card">
+    <details>
+      <summary class="card-title" style="cursor: pointer; margin-bottom: 0;">
+        External Calendar Sync <span style="font-size:12px; font-weight:normal; color:#888; margin-left: 8px;">(Click to expand)</span>
+      </summary>
+      <div style="margin-top: 20px;">
+        <div class="form-row">
+          <div style="flex:1">
+            <label>Platform Name</label>
+            <input type="text" id="feedName" placeholder="e.g. Airbnb">
+          </div>
+          <div style="flex:2">
+            <label>iCal URL</label>
+            <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addExternalIcal()">
+          ⊕ &nbsp; Add Calendar
+        </button>
+
+        <div style="margin-top:24px;">
+          <label>Configured Calendars (Auto-sync every 15 mins)</label>
+          <div id="feedsList" class="periods-list">
+            <div class="empty-state">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </details>
   </div>
 
   <!-- Current Blocking -->
