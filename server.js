@@ -928,7 +928,23 @@ app.get('/admin', (req, res) => {
       return;
     }
 
-    list.innerHTML = periods.map((p, i) => {
+    // Group identical periods for display
+    const displayGroups = [];
+    periods.forEach((p, index) => {
+      // Only merge if they are external and have exactly identical dates
+      const existing = displayGroups.find(g => g.from === p.from && g.to === p.to && g.external === p.external);
+      if (existing && p.external) { 
+        if (p.note && !existing.note.includes(p.note)) {
+          // Clean up the "[Auto]" prefix if it's repeated to keep it readable
+          const cleanNote = p.note.replace('[Auto] ', '');
+          existing.note += ' + ' + cleanNote;
+        }
+      } else {
+        displayGroups.push({ ...p, originalIndex: index });
+      }
+    });
+
+    list.innerHTML = displayGroups.map(p => {
       const isFinished = new Date(p.to).getTime() < Date.now();
       const finishedStyle = isFinished ? 'opacity: 0.4; filter: grayscale(1);' : '';
       const finishedBadge = isFinished ? '<span style="font-size:11px; padding: 2px 6px; background: rgba(255,255,255,0.1); border-radius:4px; margin-left: 8px;">Completed</span>' : '';
@@ -940,7 +956,7 @@ app.get('/admin', (req, res) => {
             <div class="period-duration">\${nights(p.from, p.to)}</div>
             \${p.note ? \`<div class="period-note">\${p.note}</div>\` : ''}
           </div>
-          \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${i})">Remove</button>\`}
+          \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${p.originalIndex})">Remove</button>\`}
         </div>
       \`;
     }).join('');
