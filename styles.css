@@ -68,7 +68,7 @@ body {
   display: grid;
   grid-template-columns: 0.9fr 1.2fr;
   grid-template-rows: 1fr; /* Lock row height to viewport */
-  padding: 40px 60px; /* Uniform outer padding */
+  padding: 40px 60px 20px 60px; /* Uniform outer padding, less on bottom */
   gap: 40px;
   box-sizing: border-box;
 }
@@ -310,7 +310,7 @@ body {
   align-items: center;
   height: 100%;
   min-height: 0; /* Constrain grid item height */
-  padding-top: 64px; /* Clear the header */
+  padding-top: 50px; /* Reduced from 64px to let the card expand upward without moving the header */
 }
 
 .glass-card {
