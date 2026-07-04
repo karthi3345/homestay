@@ -219,6 +219,17 @@
                   <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
                 </div>
                 
+                <div id="priceSummaryContainer" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="color: var(--color-text-muted); font-size: 14px;" id="priceBreakdownText">0 Nights</span>
+                    <span style="color: var(--color-text-primary); font-size: 15px; font-weight: 500;" id="priceBreakdownAmount">₹0</span>
+                  </div>
+                  <div style="border-top: 1px dashed rgba(255,255,255,0.1); margin: 8px 0; padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600; font-size: 16px;">Total</span>
+                    <span style="font-weight: 700; font-size: 20px; color: var(--accent);" id="priceTotalAmount">₹0</span>
+                  </div>
+                </div>
+                
                 <button class="btn-primary btn-book" id="whatsappBookBtn" disabled style="width: 100%; margin-top: 16px;">
                   <span>Request Booking</span>
                 </button>

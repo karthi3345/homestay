@@ -667,8 +667,49 @@ document.addEventListener('DOMContentLoaded', () => {
       const proceedContainer = document.getElementById('mobileProceedContainer');
       if (proceedContainer) proceedContainer.classList.remove('show');
       
+      // Auto-scroll down to show the "Request Booking" form
+      setTimeout(() => {
+        if (whatsappBookBtn) {
+          whatsappBookBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300); // Slight delay to allow modal closing animation
+      
       const checkInStr = checkIn.toLocaleDateString('en-US', options);
       const checkOutStr = checkOut.toLocaleDateString('en-US', options);
+      
+      // Price calculation
+      let totalNights = 0;
+      let weekdayNights = 0;
+      let weekendNights = 0;
+      
+      const priceContainer = document.getElementById('priceSummaryContainer');
+      const textEl = document.getElementById('priceBreakdownText');
+      const textAmtEl = document.getElementById('priceBreakdownAmount');
+      const totalAmtEl = document.getElementById('priceTotalAmount');
+
+      if (currentHomestay && currentHomestay.pricing && currentHomestay.pricing.weekday) {
+        let currentDate = new Date(checkIn);
+        while (currentDate < checkOut) {
+          totalNights++;
+          const day = currentDate.getDay(); // 0 = Sun, 1 = Mon, ..., 5 = Fri, 6 = Sat
+          if (day === 5 || day === 6) weekendNights++;
+          else weekdayNights++;
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const wdPrice = currentHomestay.pricing.weekday;
+        const wePrice = currentHomestay.pricing.weekend || wdPrice;
+        const total = (weekdayNights * wdPrice) + (weekendNights * wePrice);
+
+        let breakdownText = [];
+        if (weekdayNights > 0) breakdownText.push(`${weekdayNights} Weeknight${weekdayNights > 1 ? 's' : ''}`);
+        if (weekendNights > 0) breakdownText.push(`${weekendNights} Weekend Night${weekendNights > 1 ? 's' : ''}`);
+        
+        textEl.textContent = breakdownText.join(', ');
+        textAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
+        totalAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
+        if (priceContainer) priceContainer.style.display = 'block';
+      }
       
       const waNumber = currentHomestay.whatsapp.replace(/[^+\d]/g, '');
       
@@ -855,6 +896,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear inputs
       document.getElementById('checkInDate').value = '';
       document.getElementById('checkOutDate').value = '';
+      
+      const priceContainer = document.getElementById('priceSummaryContainer');
+      if (priceContainer) priceContainer.style.display = 'none';
       
       // Hide buttons
       clearBtns.forEach(b => b.style.display = 'none');

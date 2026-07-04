@@ -217,6 +217,25 @@ app.get('/api/periods/:propertyId', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: add a blocked period
 // ─────────────────────────────────────────────────────────────────────────────
+// Update Pricing Endpoint
+app.post('/api/homestay/:id/pricing', (req, res) => {
+  const { weekday, weekend } = req.body;
+  if (typeof weekday !== 'number' || typeof weekend !== 'number') {
+    return res.status(400).json({ error: 'Weekday and weekend prices must be numbers.' });
+  }
+
+  if (fs.existsSync(HOMESTAYS_FILE)) {
+    const data = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
+    const record = data.find(b => b.id === req.params.id);
+    if (record) {
+      record.pricing = { weekday, weekend };
+      fs.writeFileSync(HOMESTAYS_FILE, JSON.stringify(data, null, 2));
+      return res.json({ success: true });
+    }
+  }
+  return res.status(404).json({ error: 'Property not found.' });
+});
+
 app.post('/api/periods/:propertyId', (req, res) => {
   const { from, to, note } = req.body;
   if (!from || !to || from >= to) {
@@ -560,6 +579,7 @@ app.get('/admin', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volgo Homestay — Booking Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>window.homestaysData = ${JSON.stringify(properties)};</script>
   <style>
     ${calendarStyles}
     #adminCalendar .selection-summary, #adminCalendar .guest-selector-container { display: none !important; }
@@ -666,7 +686,7 @@ app.get('/admin', (req, res) => {
       margin-bottom: 8px;
       font-weight: 500;
     }
-    input[type="date"], input[type="text"], select {
+    input[type="date"], input[type="text"], input[type="number"], select {
       width: 100%;
       background: rgba(255,255,255,0.04);
       border: 1px solid var(--border);
@@ -678,7 +698,7 @@ app.get('/admin', (req, res) => {
       transition: border-color 0.2s;
       outline: none;
     }
-    input[type="date"]:focus, input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    input[type="date"]:focus, input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--accent); }
     input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
     select option { background: #1e2028; }
 
@@ -743,11 +763,29 @@ app.get('/admin', (req, res) => {
     <div class="form-row full">
       <div>
         <label>Select Property</label>
-        <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal();">
+        <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal(); loadPricing();">
           ${propertyOptions}
         </select>
       </div>
     </div>
+  </div>
+
+  <!-- Pricing Settings -->
+  <div class="card" id="pricingSettingsCard">
+    <div class="card-title">Pricing Settings</div>
+    <div class="form-row">
+      <div>
+        <label>Weekday Price (per night)</label>
+        <input type="number" id="weekdayPrice" placeholder="e.g. 5000">
+      </div>
+      <div>
+        <label>Weekend Price (Fri & Sat night)</label>
+        <input type="number" id="weekendPrice" placeholder="e.g. 6500">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="updatePricing()">
+      💾 &nbsp; Save Pricing
+    </button>
   </div>
 
   <!-- Block new dates -->
@@ -1109,9 +1147,51 @@ app.get('/admin', (req, res) => {
     }
   }
 
-  loadPeriods();
-  loadExternalIcal();
-  loadPendingRequests();
+  function loadPricing() {
+    if (window.homestaysData) {
+      const pid = getPropertyId();
+      const prop = window.homestaysData.find(p => p.id === pid);
+      if (prop && prop.pricing) {
+        document.getElementById('weekdayPrice').value = prop.pricing.weekday;
+        document.getElementById('weekendPrice').value = prop.pricing.weekend;
+      }
+    }
+  }
+  
+  async function updatePricing() {
+    const pid = getPropertyId();
+    const weekday = parseFloat(document.getElementById('weekdayPrice').value);
+    const weekend = parseFloat(document.getElementById('weekendPrice').value);
+    
+    if (isNaN(weekday) || isNaN(weekend)) {
+      return showToast('Please enter valid numeric prices', 'error');
+    }
+    
+    const res = await fetch('/api/homestay/' + pid + '/pricing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekday, weekend })
+    });
+    
+    if (res.ok) {
+      showToast('Pricing updated successfully!');
+      // Update local data so it stays in sync
+      const prop = window.homestaysData.find(p => p.id === pid);
+      if (prop) prop.pricing = { weekday, weekend };
+    } else {
+      showToast('Failed to update pricing', 'error');
+    }
+  }
+
+  // Load everything on startup
+  function loadAll() {
+    loadPeriods();
+    loadExternalIcal();
+    loadPendingRequests();
+    loadPricing();
+  }
+
+  loadAll();
 </script>
 </body>
 </html>`);
