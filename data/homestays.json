@@ -17,43 +17,97 @@
         "url": "PASTE_YOUR_VRBO_ICAL_URL_HERE"
       }
     ],
-    "description": "Experience an exquisite blend of architecture and wilderness. Our boutique alpine retreat offers panoramic floor-to-ceiling mountain views, handcrafted wood interiors, and premium custom furnishings designed to elevate your stay. Reconnect with nature in absolute comfort.",
+    "description": "Welcome to VolGO Homestay, your home in Pondicherry.Enjoy a peaceful stay near Rock Beach and Sri Aurobindo Ashram.Relax in a cozy space with warm and friendly hospitality.We're here to make every moment of your stay memorable.",
     "capacity": 6,
-    "bedrooms": 3,
-    "bathrooms": 3.5,
-    "location": "Mont-Blanc Valley, Alps",
-    "mapEmbedUrl": "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d44445.89069512534!2d6.8282464716766465!3d45.92318042456488!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x47894c7b0f3d9d85%3A0x1d0d9dc9cbcd04b0!2sChamonix!5e0!3m2!1sen!2s!4v1700000000000!5m2!1sen!2s",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "location": "2nd Floor, No. 11, Perumal Koil Street, Heritage Town",
+    "mapEmbedUrl": "https://maps.google.com/maps?q=2nd%20Floor,%20No.%2011,%20Perumal%20Koil%20Street,%20Heritage%20Town&t=&z=16&ie=UTF8&iwloc=&output=embed",
     "phone": "+91 97517 18950",
     "whatsapp": "+919751718950",
     "email": "mdu.mathivaanan@gmail.com",
     "icalUrl": "",
-    "amenities": [
-      { "name": "Mountain View", "icon": "landscape" },
-      { "name": "Indoor Fireplace", "icon": "fireplace" },
-      { "name": "Private Hot Tub", "icon": "hot_tub" },
-      { "name": "High-Speed Wi-Fi", "icon": "wifi" },
-      { "name": "Fully Equipped Kitchen", "icon": "cooking" },
-      { "name": "King Beds", "icon": "bed" },
-      { "name": "Heated Floors", "icon": "thermostat" },
-      { "name": "Complimentary Wine & Coffee", "icon": "local_cafe" }
+    "amenityCategories": [
+      {
+        "category": "Amenities for Couples",
+        "items": [
+          { "name": "Private Kitchen", "icon": "restaurant" }
+        ]
+      },
+      {
+        "category": "Basic Facilities",
+        "items": [
+          { "name": "Power Backup", "icon": "battery_charging_full" },
+          { "name": "Washing Machine", "icon": "local_laundry_service" },
+          { "name": "Air Conditioning", "icon": "ac_unit" },
+          { "name": "Wi-Fi", "icon": "wifi" }
+        ]
+      },
+      {
+        "category": "Caretaker and Key Services",
+        "items": [
+          { "name": "Caretaker available to assist guests", "icon": "support_agent" }
+        ]
+      },
+      {
+        "category": "Health and wellness",
+        "items": [
+          { "name": "First-aid Services", "icon": "medical_services" }
+        ]
+      },
+      {
+        "category": "Room Amenities",
+        "items": [
+          { "name": "Iron/Ironing Board", "icon": "iron" },
+          { "name": "Mineral Water (Free)", "icon": "water_drop" },
+          { "name": "Kettle", "icon": "coffee_maker" },
+          { "name": "Safe", "icon": "lock" },
+          { "name": "Hairdryer", "icon": "air" },
+          { "name": "Hot & Cold Water", "icon": "shower" },
+          { "name": "Toiletries (Premium)", "icon": "soap" },
+          { "name": "Towels", "icon": "dry" },
+          { "name": "Private Balcony", "icon": "balcony" },
+          { "name": "Bathroom", "icon": "bathtub" }
+        ]
+      },
+      {
+        "category": "Safety and Security",
+        "items": [
+          { "name": "CCTV", "icon": "videocam" }
+        ]
+      },
+      {
+        "category": "Media and technology",
+        "items": [
+          { "name": "TV", "icon": "tv" }
+        ]
+      }
     ],
-    "images": [
-      "assets/images/volgo_1.webp",
-      "assets/images/volgo_2.webp",
-      "assets/images/volgo_3.webp",
-      "assets/images/volgo_4.webp",
-      "assets/images/volgo_5.webp",
-      "assets/images/volgo_6.webp",
-      "assets/images/volgo_7.webp",
-      "assets/images/volgo_8.webp",
-      "assets/images/volgo_9.webp",
-      "assets/images/volgo_10.webp",
-      "assets/images/volgo_11.webp",
-      "assets/images/volgo_12.webp",
-      "assets/images/volgo_13.webp",
-      "assets/images/volgo_14.webp",
-      "assets/images/volgo_15.webp",
-      "assets/images/volgo_16.webp"
+    "imageCategories": [
+      {
+        "category": "Entrance",
+        "images": ["assets/images/volgo_2.webp", "assets/images/volgo_16.webp"]
+      },
+      {
+        "category": "Bedroom 1",
+        "images": ["assets/images/volgo_1.webp", "assets/images/volgo_14.webp", "assets/images/volgo_15.webp"]
+      },
+      {
+        "category": "Bedroom 2",
+        "images": ["assets/images/volgo_11.webp", "assets/images/volgo_12.webp"]
+      },
+      {
+        "category": "Private Kitchen",
+        "images": ["assets/images/volgo_5.webp", "assets/images/volgo_7.webp", "assets/images/volgo_8.webp", "assets/images/volgo_9.webp", "assets/images/volgo_10.webp"]
+      },
+      {
+        "category": "Balcony",
+        "images": ["assets/images/volgo_13.webp"]
+      },
+      {
+        "category": "Toilet",
+        "images": ["assets/images/volgo_3.webp", "assets/images/volgo_4.webp"]
+      }
     ],
     "bookedDates": [
       "2026-07-05",

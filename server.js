@@ -97,8 +97,9 @@ app.post('/api/request-booking', (req, res) => {
             "<p><strong>Property:</strong> " + payload.homestayName + "</p>" +
             "<p><strong>Guest Name:</strong> " + payload.guestName + "</p>" +
             "<p><strong>Phone / WhatsApp:</strong> " + payload.guestPhone + "</p>" +
-            "<p><strong>Check-In:</strong> " + payload.checkIn + "</p>" +
-            "<p><strong>Check-Out:</strong> " + payload.checkOut + "</p>" +
+            (payload.promoCode ? "<p><strong>Promo Code:</strong> " + payload.promoCode + "</p>" : "") +
+            "<p><strong>Check-in:</strong> " + payload.checkIn + "</p>" +
+            "<p><strong>Check-out:</strong> " + payload.checkOut + "</p>" +
             "<p><strong>Guests:</strong> " + payload.adults + " Adults, " + payload.children + " Children</p>" +
             "<p><strong>Note:</strong> " + (payload.note || 'None') + "</p>" +
             "<br/>" +

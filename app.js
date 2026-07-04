@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const propertySelector = document.getElementById('propertySelector');
   const heroTitle = document.getElementById('heroTitle');
   const heroTagline = document.getElementById('heroTagline');
-  const heroCta = document.getElementById('heroCta');
+
   
   // Tab elements
   const tabs = document.querySelectorAll('.nav-tab');
@@ -45,6 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Booking Action
   const whatsappBookBtn = document.getElementById('whatsappBookBtn');
+  
+  // Booking Form State
+  let bookingAdults = 2;
+  let bookingChildren = 0;
+  let maxGuests = 6;
 
   // --- Vanilla BorderGlow Port ---
   function initBorderGlow() {
@@ -113,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const color = '#ffc800';
     const speed = 0.7;
     const chaos = 0.04;
-    const borderRadius = 32;
+    const borderRadius = 24;
 
     const octaves = 10;
     const lacunarity = 1.6;
@@ -248,10 +253,11 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.lineJoin = 'round';
 
       const scale = displacement;
-      const left = borderOffset;
-      const top = borderOffset;
-      const borderWidth = width - 2 * borderOffset;
-      const borderHeight = height - 2 * borderOffset;
+      const margin = -7.5; // push outwards to perfectly overlap the static border
+      const left = borderOffset + margin;
+      const top = borderOffset + margin;
+      const borderWidth = width - 2 * borderOffset - 2 * margin;
+      const borderHeight = height - 2 * borderOffset - 2 * margin;
       
       // Prevent crash if width/height is 0 (hidden)
       if (borderWidth <= 0 || borderHeight <= 0) {
@@ -318,15 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       
-      // Update Split-Screen Booking Layout
-      const heroPane = document.querySelector('.hero-pane');
-      if (heroPane) {
-        if (targetTab === 'calendar') {
-          heroPane.classList.add('show-booking');
-        } else {
-          heroPane.classList.remove('show-booking');
-        }
-      }
 
       // Auto-scroll to tab content on mobile/tablet view
       if (window.innerWidth <= 1024) {
@@ -338,90 +335,198 @@ document.addEventListener('DOMContentLoaded', () => {
           }, 50);
         }
       }
+      // Dispatch resize event to recalculate layout for newly visible elements (e.g. gallery carousels)
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 250);
     });
-  });
-
-  // CTA Button Click (Scrolls or shifts to calendar)
-  heroCta.addEventListener('click', () => {
-    const calTab = document.querySelector('[data-tab="calendar"]');
-    if (calTab) calTab.click();
   });
 
   // Setup property dropdown options
   function setupPropertySelector() {
-    // If only one property, hide the dropdown arrow and don't bind events
-    if (homestays.length <= 1) {
-      const arrow = activePropertyBtn.querySelector('.dropdown-arrow');
-      if (arrow) arrow.style.display = 'none';
-      activePropertyBtn.style.cursor = 'default';
-      return;
-    }
-    
-    // Otherwise populate list
-    propertyDropdown.innerHTML = '';
-    homestays.forEach(h => {
-      const item = document.createElement('div');
-      item.classList.add('dropdown-item');
-      item.textContent = h.name;
-      item.addEventListener('click', () => {
-        loadHomestay(h);
-        propertyDropdown.classList.remove('active');
-      });
-      propertyDropdown.appendChild(item);
-    });
-    
-    activePropertyBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      propertyDropdown.classList.toggle('active');
-    });
-    
-    document.addEventListener('click', () => {
-      propertyDropdown.classList.remove('active');
-    });
+    return; // Element was removed from HTML
   }
 
   // Load selected homestay details
   function loadHomestay(homestay) {
     currentHomestay = homestay;
     
+    const randomCaptions = [
+      "Beach. Beats. Bliss.",
+      "Stay. Vibe. Explore.",
+      "Stay. Sip. Celebrate.",
+      "French Streets Await",
+      "Home Beyond Home",
+      "Comfort Meets Care"
+    ];
+    const randomTitle = randomCaptions[Math.floor(Math.random() * randomCaptions.length)];
+    
+    const randomTaglines = [
+      "A Peaceful Homestay Close To Pondicherry's Best Attractions",
+      "Feel At Home Near Pondicherry's Iconic Rock Beach",
+      "Your Perfect Stay Near Beaches, Heritage, And Cafés",
+      "Discover Pondicherry While Staying In Complete Comfort"
+    ];
+    const randomTagline = randomTaglines[Math.floor(Math.random() * randomTaglines.length)];
+    
     // Update headers and titles
-    document.querySelector('.active-property-name').textContent = homestay.name;
-    heroTitle.textContent = homestay.name;
-    heroTagline.textContent = homestay.tagline;
-    document.title = `${homestay.name} | Premium Homestay`;
+    heroTitle.textContent = randomTitle;
+    heroTagline.textContent = randomTagline;
+    document.title = `Volgo HomeStay | Premium Homestay`;
     
     // Overview tab details
     specGuests.textContent = `Up to ${homestay.capacity} Guests`;
     specBedrooms.textContent = `${homestay.bedrooms} Bedrooms`;
     specBathrooms.textContent = `${homestay.bathrooms} Baths`;
-    propertyDesc.textContent = homestay.description;
+    propertyDesc.innerHTML = homestay.description;
     
     // Amenities
     amenitiesGrid.innerHTML = '';
-    homestay.amenities.forEach(amenity => {
-      const box = document.createElement('div');
-      box.classList.add('amenity-card');
-      box.innerHTML = `
-        <span class="material-symbols-outlined amenity-icon">${amenity.icon}</span>
-        <span class="amenity-name">${amenity.name}</span>
-      `;
-      amenitiesGrid.appendChild(box);
-    });
+    
+    if (homestay.amenityCategories) {
+      // New categorized structure
+      homestay.amenityCategories.forEach(category => {
+        // Create category title
+        const catTitle = document.createElement('h4');
+        catTitle.textContent = category.category;
+        catTitle.style.gridColumn = "1 / -1";
+        catTitle.style.marginTop = "24px";
+        catTitle.style.marginBottom = "8px";
+        catTitle.style.fontSize = "16px";
+        catTitle.style.color = "var(--color-text-secondary)";
+        amenitiesGrid.appendChild(catTitle);
+        
+        category.items.forEach(amenity => {
+          const box = document.createElement('div');
+          box.classList.add('amenity-card');
+          box.innerHTML = `
+            <span class="material-symbols-outlined amenity-icon">${amenity.icon}</span>
+            <span class="amenity-name">${amenity.name}</span>
+          `;
+          amenitiesGrid.appendChild(box);
+        });
+      });
+    } else if (homestay.amenities) {
+      // Fallback for older flat structure
+      homestay.amenities.forEach(amenity => {
+        const box = document.createElement('div');
+        box.classList.add('amenity-card');
+        box.innerHTML = `
+          <span class="material-symbols-outlined amenity-icon">${amenity.icon}</span>
+          <span class="amenity-name">${amenity.name}</span>
+        `;
+        amenitiesGrid.appendChild(box);
+      });
+    }
     
     // Gallery
     galleryGrid.innerHTML = '';
-    homestay.images.forEach((imgUrl, idx) => {
-      const wrapper = document.createElement('div');
-      wrapper.classList.add('gallery-item');
-      wrapper.innerHTML = `
-        <img src="${imgUrl}" alt="${homestay.name} view ${idx + 1}" loading="lazy">
-        <div class="gallery-hover-overlay">
-          <span class="material-symbols-outlined">zoom_in</span>
-        </div>
-      `;
-      wrapper.addEventListener('click', () => openLightbox(idx));
-      galleryGrid.appendChild(wrapper);
-    });
+    
+    if (homestay.imageCategories) {
+      homestay.images = []; // Rebuild flat array for lightbox
+      let globalIndex = 0;
+      
+      homestay.imageCategories.forEach(category => {
+        // Create category title
+        const catTitle = document.createElement('h4');
+        catTitle.textContent = category.category;
+        catTitle.style.gridColumn = "1 / -1";
+        catTitle.style.marginTop = "24px";
+        catTitle.style.marginBottom = "8px";
+        catTitle.style.fontSize = "16px";
+        catTitle.style.color = "var(--color-text-secondary)";
+        galleryGrid.appendChild(catTitle);
+        // Carousel Container
+        const carouselWrapper = document.createElement('div');
+        carouselWrapper.className = 'gallery-carousel-wrapper';
+        carouselWrapper.style.gridColumn = "1 / -1";
+        
+        // Prev button
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'gallery-nav-btn prev';
+        prevBtn.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+        
+        // Next button
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'gallery-nav-btn next';
+        nextBtn.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+        
+        // Carousel track
+        const carousel = document.createElement('div');
+        carousel.className = 'gallery-carousel';
+        
+        // Scrolling logic
+        prevBtn.onclick = () => carousel.scrollBy({ left: -300, behavior: 'smooth' });
+        nextBtn.onclick = () => carousel.scrollBy({ left: 300, behavior: 'smooth' });
+        
+        category.images.forEach(imgUrl => {
+          homestay.images.push(imgUrl); // Add to flat array
+          const idx = globalIndex++;
+          
+          const wrapper = document.createElement('div');
+          wrapper.classList.add('gallery-item');
+          wrapper.innerHTML = `
+            <img src="${imgUrl}" alt="${homestay.name} ${category.category} view" loading="lazy">
+            <div class="gallery-hover-overlay">
+              <span class="material-symbols-outlined">zoom_in</span>
+            </div>
+          `;
+          wrapper.addEventListener('click', () => openLightbox(idx));
+          carousel.appendChild(wrapper);
+        });
+        
+        // Button visibility logic
+        const checkButtons = () => {
+          const maxScrollLeft = carousel.scrollWidth - carousel.clientWidth;
+          
+          if (carousel.scrollLeft <= 0) {
+            prevBtn.style.display = 'none';
+          } else {
+            prevBtn.style.display = 'flex';
+          }
+          
+          if (carousel.scrollLeft >= maxScrollLeft - 1) {
+            nextBtn.style.display = 'none';
+          } else {
+            nextBtn.style.display = 'flex';
+          }
+          
+          // If no scrolling is needed
+          if (carousel.scrollWidth <= carousel.clientWidth) {
+            prevBtn.style.display = 'none';
+            nextBtn.style.display = 'none';
+          }
+        };
+        
+        carousel.addEventListener('scroll', checkButtons);
+        window.addEventListener('resize', checkButtons);
+        
+        carouselWrapper.appendChild(prevBtn);
+        carouselWrapper.appendChild(carousel);
+        carouselWrapper.appendChild(nextBtn);
+        
+        galleryGrid.appendChild(carouselWrapper);
+        
+        // Initialize button visibility after DOM paints
+        requestAnimationFrame(() => {
+          setTimeout(checkButtons, 50); // slight delay to ensure layout is computed
+        });
+      });
+    } else if (homestay.images) {
+      // Fallback to flat images list
+      homestay.images.forEach((imgUrl, idx) => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('gallery-item');
+        wrapper.innerHTML = `
+          <img src="${imgUrl}" alt="${homestay.name} view ${idx + 1}" loading="lazy">
+          <div class="gallery-hover-overlay">
+            <span class="material-symbols-outlined">zoom_in</span>
+          </div>
+        `;
+        wrapper.addEventListener('click', () => openLightbox(idx));
+        galleryGrid.appendChild(wrapper);
+      });
+    }
     
     // Contacts
     contactPhone.textContent = homestay.phone;
@@ -488,8 +593,35 @@ document.addEventListener('DOMContentLoaded', () => {
     whatsappBookBtn.disabled = true;
     whatsappBookBtn.classList.remove('active');
     
+    // Reset guests
+    bookingAdults = 2;
+    bookingChildren = 0;
+    maxGuests = homestay.capacity;
+    updateGuestDisplay();
+    
     const proceedContainer = document.getElementById('mobileProceedContainer');
     if (proceedContainer) proceedContainer.classList.remove('show');
+  }
+
+  function updateGuestDisplay() {
+    const countAdults = document.getElementById('countAdults');
+    const countChildren = document.getElementById('countChildren');
+    const btnAdultDec = document.getElementById('btnAdultDec');
+    const btnAdultInc = document.getElementById('btnAdultInc');
+    const btnChildDec = document.getElementById('btnChildDec');
+    const btnChildInc = document.getElementById('btnChildInc');
+    
+    if (!countAdults || !countChildren) return;
+    
+    const total = bookingAdults + bookingChildren;
+    
+    countAdults.textContent = bookingAdults;
+    countChildren.textContent = bookingChildren;
+    
+    btnAdultDec.disabled = bookingAdults <= 1;
+    btnAdultInc.disabled = total >= maxGuests;
+    btnChildDec.disabled = bookingChildren <= 0;
+    btnChildInc.disabled = total >= maxGuests;
   }
 
   // Full Canvas Random Background Setup
@@ -503,31 +635,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Handle Date Selection from calendar
   function handleDateSelection(selection) {
-    const { checkIn, checkOut, adults, children } = selection;
+    const { checkIn, checkOut } = selection;
+    
+    const checkInInput = document.getElementById('checkInDate');
+    const checkOutInput = document.getElementById('checkOutDate');
+    const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+    
+    if (checkIn) checkInInput.value = checkIn.toLocaleDateString('en-US', options);
+    else checkInInput.value = '';
+    
+    if (checkOut) checkOutInput.value = checkOut.toLocaleDateString('en-US', options);
+    else checkOutInput.value = '';
+    
+    const clearBtns = document.querySelectorAll('.clear-date-btn');
+    if (checkIn || checkOut) {
+      clearBtns.forEach(btn => btn.style.display = 'block');
+    } else {
+      clearBtns.forEach(btn => btn.style.display = 'none');
+    }
+    
     
     if (checkIn && checkOut) {
       whatsappBookBtn.disabled = false;
       whatsappBookBtn.classList.add('active');
       
-      const proceedContainer = document.getElementById('mobileProceedContainer');
-      const proceedBtn = document.getElementById('mobileProceedBtn');
-      if (proceedContainer && proceedBtn && window.innerWidth <= 1024) {
-        proceedContainer.classList.add('show');
-        proceedBtn.onclick = () => {
-          const bookingForm = document.querySelector('.hero-booking-form');
-          if (bookingForm) {
-            proceedContainer.classList.remove('show'); // Hide it when they click it
-            bookingForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            setTimeout(() => {
-              const nameInput = document.getElementById('guestName');
-              if (nameInput) nameInput.focus();
-            }, 600); // Wait for smooth scroll to finish
-          }
-        };
-      }
+      // Auto-close modal when both are selected
+      const overlay = document.getElementById('calendarModalOverlay');
+      if (overlay) overlay.classList.remove('active');
       
-      // Calculate display dates
-      const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+      // Hide mobile proceed button as booking is inline now
+      const proceedContainer = document.getElementById('mobileProceedContainer');
+      if (proceedContainer) proceedContainer.classList.remove('show');
+      
       const checkInStr = checkIn.toLocaleDateString('en-US', options);
       const checkOutStr = checkOut.toLocaleDateString('en-US', options);
       
@@ -536,10 +675,12 @@ document.addEventListener('DOMContentLoaded', () => {
       whatsappBookBtn.onclick = async () => {
         const guestNameEl = document.getElementById('guestName');
         const guestPhoneEl = document.getElementById('guestPhone');
+        const promoCodeEl = document.getElementById('promoCode');
         const noteEl = document.getElementById('bookingNote');
         
         const guestName = guestNameEl ? guestNameEl.value.trim() : '';
         const guestPhone = guestPhoneEl ? guestPhoneEl.value.trim() : '';
+        const promoCode = promoCodeEl ? promoCodeEl.value.trim() : '';
         const noteText = noteEl ? noteEl.value.trim() : '';
 
         if (!guestName || !guestPhone) {
@@ -562,10 +703,11 @@ document.addEventListener('DOMContentLoaded', () => {
           homestayName: currentHomestay.name,
           checkIn: checkInStr,
           checkOut: checkOutStr,
-          adults,
-          children,
+          adults: bookingAdults,
+          children: bookingChildren,
           guestName,
           guestPhone,
+          promoCode,
           note: noteText,
           checkInMs: checkIn.getTime(),
           checkOutMs: checkOut.getTime()
@@ -587,6 +729,7 @@ document.addEventListener('DOMContentLoaded', () => {
               // Reset form
               if(guestNameEl) guestNameEl.value = '';
               if(guestPhoneEl) guestPhoneEl.value = '';
+              if(promoCodeEl) promoCodeEl.value = '';
               if(noteEl) noteEl.value = '';
               calendarInstance.checkIn = null;
               calendarInstance.checkOut = null;
@@ -658,4 +801,77 @@ document.addEventListener('DOMContentLoaded', () => {
       closeLightbox();
     }
   });
+
+  // Initialize Calendar Modal Triggers
+  const calendarModalOverlay = document.getElementById('calendarModalOverlay');
+  const closeCalendarBtn = document.getElementById('closeCalendarBtn');
+  const dateTriggers = document.querySelectorAll('.date-trigger');
+  
+  if (calendarModalOverlay) {
+    dateTriggers.forEach(btn => {
+      btn.addEventListener('click', () => {
+        calendarModalOverlay.classList.add('active');
+      });
+    });
+    
+    closeCalendarBtn.addEventListener('click', () => {
+      calendarModalOverlay.classList.remove('active');
+    });
+    
+    calendarModalOverlay.addEventListener('click', (e) => {
+      if (e.target === calendarModalOverlay) {
+        calendarModalOverlay.classList.remove('active');
+      }
+    });
+  }
+  
+  // Guest Selector Triggers
+  const btnAdultDec = document.getElementById('btnAdultDec');
+  const btnAdultInc = document.getElementById('btnAdultInc');
+  const btnChildDec = document.getElementById('btnChildDec');
+  const btnChildInc = document.getElementById('btnChildInc');
+  
+  if (btnAdultDec) {
+    btnAdultDec.addEventListener('click', () => {
+      if (bookingAdults > 1) { bookingAdults--; updateGuestDisplay(); }
+    });
+    btnAdultInc.addEventListener('click', () => {
+      if (bookingAdults + bookingChildren < maxGuests) { bookingAdults++; updateGuestDisplay(); }
+    });
+    btnChildDec.addEventListener('click', () => {
+      if (bookingChildren > 0) { bookingChildren--; updateGuestDisplay(); }
+    });
+    btnChildInc.addEventListener('click', () => {
+      if (bookingAdults + bookingChildren < maxGuests) { bookingChildren++; updateGuestDisplay(); }
+    });
+  }
+  
+  // Clear Date Buttons
+  const clearBtns = document.querySelectorAll('.clear-date-btn');
+  clearBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent opening the calendar
+      
+      // Clear inputs
+      document.getElementById('checkInDate').value = '';
+      document.getElementById('checkOutDate').value = '';
+      
+      // Hide buttons
+      clearBtns.forEach(b => b.style.display = 'none');
+      
+      // Disable booking button
+      whatsappBookBtn.disabled = true;
+      whatsappBookBtn.classList.remove('active');
+      
+      // Clear calendar instance
+      if (window.calendarInstance) {
+        window.calendarInstance.checkIn = null;
+        window.calendarInstance.checkOut = null;
+        window.calendarInstance.hoverDate = null;
+        window.calendarInstance._drawGrid();
+        window.calendarInstance._notify();
+      }
+    });
+  });
+
 });

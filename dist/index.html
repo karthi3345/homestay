@@ -9,14 +9,14 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   
   <!-- Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   
   <!-- Stylesheets -->
-  <script type="module" crossorigin src="/assets/index-C8ymyyGJ.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DIIsyicv.css">
+  <script type="module" crossorigin src="/assets/index-DaEX2eHO.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B7eo3r2t.css">
 </head>
 <body>
 
@@ -26,73 +26,24 @@
   <!-- Main Viewport Layout -->
   <main class="viewport-layout">
     
+    <!-- Liquid Glass Header (Full Width) -->
+    <header class="site-header">
+      <div class="header-left">
+        <img src="/assets/volg-logo-main-mpyMQ-Bh.png" alt="VOLGO" class="logo">
+      </div>
+    </header>
+    
     <!-- Left Pane: Hero Branding -->
     <section class="hero-pane">
-
-      <!-- Liquid Glass Header (Partial Width) -->
-      <header class="site-header">
-        <div class="header-left">
-          <img src="/assets/volg-logo-main-mpyMQ-Bh.png" alt="VOLGO" class="logo">
-        </div>
-        
-        <div class="header-right">
-          <!-- Scalable Homestay Selector -->
-          <div class="property-selector" id="propertySelector">
-            <div class="selected-property-btn" id="activePropertyBtn">
-              <span class="active-property-name">Loading...</span>
-              <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-            </div>
-            <div class="property-dropdown" id="propertyDropdown">
-              <!-- Dropdown items injected via JS -->
-            </div>
-          </div>
-        </div>
-      </header>
       
+
       <div class="hero-content-wrapper">
         <div class="hero-content">
           <h1 class="hero-title" id="heroTitle">Volgo Alpine Retreat</h1>
           <p class="hero-tagline" id="heroTagline">A premium sanctuary nestled in pristine nature.</p>
-          
-          <button class="btn-primary cta-check-btn" id="heroCta">
-            <span>Check Availability</span>
-            <span class="material-symbols-outlined">calendar_today</span>
-          </button>
         </div>
 
-        <div class="hero-booking-form electric-border" id="bookingElectricBorder" style="--electric-border-color: #ffc800;">
-          <div class="eb-canvas-container">
-            <canvas class="eb-canvas" id="bookingCanvas"></canvas>
-          </div>
-          <div class="eb-layers">
-            <div class="eb-glow-1"></div>
-            <div class="eb-glow-2"></div>
-            <div class="eb-background-glow"></div>
-          </div>
-          <div class="eb-content">
-            <h2 class="booking-form-title">Complete Your Booking</h2>
-            <div class="booking-action-bar">
-              <div class="booking-contact-inputs">
-                <div class="input-group">
-                  <label for="guestName">Full Name</label>
-                  <input type="text" id="guestName" placeholder="John Doe" required />
-                </div>
-                <div class="input-group">
-                  <label for="guestPhone">WhatsApp Number</label>
-                  <input type="tel" id="guestPhone" placeholder="+919876543210" pattern="^\+?[0-9]{10,15}$" title="Please enter a valid phone number (10-15 digits), optionally starting with +" required />
-                </div>
-              </div>
-              <div class="booking-note-container">
-                <label for="bookingNote" class="booking-note-label">Request Note (Optional)</label>
-                <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
-              </div>
-              <button class="btn-primary btn-book" id="whatsappBookBtn" disabled>
-                <span>Request Booking</span>
-              </button>
-              <div class="booking-notice">Payment in person during check-in. No advance needed.</div>
-            </div>
-          </div>
-        </div>
+        <!-- Booking form moved to right pane -->
       </div>
     </section>
 
@@ -103,18 +54,18 @@
         <div class="border-glow-inner">
           
           <!-- Tab Navigation -->
-          <nav class="card-nav">
-          <button class="nav-tab active" data-tab="overview">
+        <nav class="card-nav">
+          <button class="nav-tab active" data-tab="calendar">
+            <span class="material-symbols-outlined">calendar_month</span>
+            <span>Booking</span>
+          </button>
+          <button class="nav-tab" data-tab="overview">
             <span class="material-symbols-outlined">info</span>
             <span>Overview</span>
           </button>
           <button class="nav-tab" data-tab="gallery">
             <span class="material-symbols-outlined">photo_library</span>
             <span>Gallery</span>
-          </button>
-          <button class="nav-tab" data-tab="calendar">
-            <span class="material-symbols-outlined">calendar_month</span>
-            <span>Calendar</span>
           </button>
           <button class="nav-tab" data-tab="contact">
             <span class="material-symbols-outlined">alternate_email</span>
@@ -126,9 +77,9 @@
         <div class="card-content-wrapper">
           
           <!-- TAB: Overview -->
-          <div class="tab-pane active" id="tab-overview">
+          <div class="tab-pane" id="tab-overview">
             <div class="pane-header">
-              <h2 class="pane-title">The Residence</h2>
+              <h2 class="pane-title">Volgo HomeStay</h2>
               <div class="residence-specs">
                 <div class="spec-item">
                   <span class="material-symbols-outlined">group</span>
@@ -148,10 +99,10 @@
             </div>
             
             <p class="description-text" id="propertyDesc">
-              Experience an exquisite blend of architecture and wilderness. Our boutique alpine retreat offers panoramic floor-to-ceiling mountain views, handcrafted wood interiors, and premium custom furnishings.
+              Welcome to VolGO Homestay, your home in Pondicherry.Enjoy a peaceful stay near Rock Beach and Sri Aurobindo Ashram.Relax in a cozy space with warm and friendly hospitality.We're here to make every moment of your stay memorable.
             </p>
             
-            <h3 class="section-subtitle">Premium Amenities</h3>
+            <h3 class="section-subtitle">Amenities</h3>
             <div class="amenities-grid" id="amenitiesGrid">
               <!-- Dynamically populated -->
             </div>
@@ -171,35 +122,112 @@
           </div>
           
           <!-- TAB: Calendar -->
-          <div class="tab-pane" id="tab-calendar">
-            <div class="pane-header">
-              <h2 class="pane-title">Availability</h2>
-              <p class="pane-subtitle">Select your stay dates to request booking</p>
+          <div class="tab-pane active" id="tab-calendar">
+            <div class="booking-form-inline" style="position: relative;">
+              <h2 class="booking-form-title" style="margin-bottom: 24px; font-size: 24px;">Complete Your Booking</h2>
               
-              <div class="calendar-meta-info" style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; font-size:13px;">
-                <div class="calendar-legend" style="display:flex; gap:16px;">
-                  <span style="display:flex; align-items:center; gap:6px; font-weight:500;"><span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:var(--accent);"></span> Available</span>
-                  <span style="display:flex; align-items:center; gap:6px; color:var(--muted);"><span style="display:inline-block; width:12px; height:12px; border-radius:4px; background:rgba(255,255,255,0.05); text-decoration:line-through;"></span> Booked</span>
+              <!-- Calendar Modal Popup -->
+              <div id="calendarModalOverlay" class="calendar-modal-overlay">
+                <div class="electric-border calendar-modal-box" id="bookingElectricBorder" style="--electric-border-color: #ffc800;">
+                  <div class="eb-canvas-container">
+                    <canvas class="eb-canvas" id="bookingCanvas"></canvas>
+                  </div>
+                  <div class="eb-layers">
+                    <div class="eb-glow-1"></div>
+                    <div class="eb-glow-2"></div>
+                    <div class="eb-background-glow"></div>
+                  </div>
+                  <div class="eb-content">
+                    <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                      <h3 style="margin:0; font-size:20px; font-weight:500;">Select Dates</h3>
+                      <button id="closeCalendarBtn" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
+                    </div>
+                    
+
+                    
+                    <div id="bookingCalendar" class="calendar-container">
+                      <!-- Calendar rendered here -->
+                    </div>
+                  </div>
                 </div>
-                <div class="calendar-rules" style="color:var(--muted); font-weight:500;">
-                  Check-in: 2 PM &nbsp;|&nbsp; Check-out: 11 AM
+              </div>
+
+              
+              <div class="booking-action-bar" style="background: transparent; border: none; padding: 0;">
+                <div class="booking-contact-inputs">
+                  <div class="input-group" style="grid-column: 1 / -1;">
+                    <label for="bookingLocation">Location</label>
+                    <input type="text" id="bookingLocation" value="Pondicherry" readonly style="cursor: default;" />
+                  </div>
+                  
+                  <div class="input-group">
+                    <label for="checkInDate">Check In</label>
+                    <div style="position: relative;">
+                      <input type="text" id="checkInDate" placeholder="Select Date" readonly style="cursor: pointer; padding-right: 28px; width: 100%; box-sizing: border-box;" class="date-trigger" />
+                      <button type="button" class="clear-date-btn" style="display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; padding: 0; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="input-group">
+                    <label for="checkOutDate">Check Out</label>
+                    <div style="position: relative;">
+                      <input type="text" id="checkOutDate" placeholder="Select Date" readonly style="cursor: pointer; padding-right: 28px; width: 100%; box-sizing: border-box;" class="date-trigger" />
+                      <button type="button" class="clear-date-btn" style="display: none; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--color-text-muted); cursor: pointer; padding: 0; align-items: center; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div class="input-group" style="padding-top: 4px;">
+                    <label>Guests</label>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:2px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; font-weight:500;">Adults</span>
+                        <div class="guest-controls" style="display:flex; align-items:center; gap:8px;">
+                          <button type="button" class="btn-adult-dec" id="btnAdultDec" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;" disabled>−</button>
+                          <span class="guest-count" id="countAdults" style="width:16px; text-align:center; font-size:13px;">2</span>
+                          <button type="button" class="btn-adult-inc" id="btnAdultInc" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;">+</button>
+                        </div>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; font-weight:500;">Children</span>
+                        <div class="guest-controls" style="display:flex; align-items:center; gap:8px;">
+                          <button type="button" class="btn-child-dec" id="btnChildDec" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;" disabled>−</button>
+                          <span class="guest-count" id="countChildren" style="width:16px; text-align:center; font-size:13px;">0</span>
+                          <button type="button" class="btn-child-inc" id="btnChildInc" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="input-group full-width" style="margin-top: 8px;">
+                    <label for="guestName">Your Full Name</label>
+                    <input type="text" id="guestName" placeholder="May We Know Your Name?" required class="highlight-input" />
+                  </div>
+                  <div class="input-group full-width">
+                    <label for="guestPhone">WhatsApp Number</label>
+                    <input type="tel" id="guestPhone" placeholder="+919876543210" pattern="^\+?[0-9]{10,15}$" title="Please enter a valid phone number (10-15 digits), optionally starting with +" required class="highlight-input" />
+                  </div>
+                  <div class="input-group full-width">
+                    <label for="promoCode">Promo Code</label>
+                    <input type="text" id="promoCode" placeholder="Enter Promo Code (Optional)" />
+                  </div>
+                </div>
+                
+                <div class="booking-note-container">
+                  <label for="bookingNote" class="booking-note-label">Request Note (Optional)</label>
+                  <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
+                </div>
+                
+                <button class="btn-primary btn-book" id="whatsappBookBtn" disabled style="width: 100%; margin-top: 16px;">
+                  <span>Request Booking</span>
+                </button>
+                <div class="calendar-rules" style="color:var(--muted); font-weight:500; text-align:center; margin-top:16px; font-size:13px;">
+                  Check-in: 12 PM &nbsp;|&nbsp; Check-out: 10 AM
                 </div>
               </div>
             </div>
-            
-            <div id="bookingCalendar" class="calendar-container">
-              <!-- Calendar rendered here -->
-            </div>
-            
-            <!-- Mobile Proceed Button -->
-            <div id="mobileProceedContainer" class="mobile-proceed-fab">
-              <button class="btn-primary" id="mobileProceedBtn">
-                <span>Continue</span>
-                <span class="material-symbols-outlined">arrow_upward</span>
-              </button>
-            </div>
-            
-            <!-- Booking form was moved to the left pane -->
           </div>
           
           <!-- TAB: Contact -->
@@ -255,6 +283,20 @@
                 referrerpolicy="no-referrer-when-downgrade">
               </iframe>
             </div>
+            
+            <div class="host-section">
+              <div class="host-header">
+                <img src="/assets/host-ClaOVsmo.webp" alt="Host Profile" class="host-avatar">
+                <div class="host-title-info">
+                  <h3>Hosted By Rajachandran</h3>
+                  <span class="host-since">Hosting since 2026</span>
+                </div>
+              </div>
+              <p class="host-description">
+                Hi, I’m Rajachandran,<br/>
+                I love welcoming guests and making them feel at home during their stay. We live nearby, so we're always available if you need any assistance while respecting your privacy. I look forward to hosting you and helping you enjoy the best of Pondicherry.
+              </p>
+            </div>
           </div>
           
         </div>
@@ -281,5 +323,6 @@
 
   <!-- Javascript Modules -->
   <!-- Javascript Modules -->
+
 </body>
 </html>

@@ -47,7 +47,6 @@ class HomestayCalendar {
         this.adults = max;
       }
     }
-    this._drawGuests();
   }
 
   /* ─────────────────────────────── build DOM ─── */
@@ -81,13 +80,10 @@ class HomestayCalendar {
             <div class="summary-value checkout-val">Select date</div>
           </div>
         </div>
-
-        <div class="guest-selector-container"></div>
       </div>
     `;
 
     this._drawGrid();
-    this._drawGuests();
     this._attachEvents();
   }
 
@@ -179,30 +175,6 @@ class HomestayCalendar {
     this._drawSummary();
   }
 
-  /* ─────────────────────────────── render guests ─── */
-
-  _drawGuests() {
-    const el = this.container.querySelector('.guest-selector-container');
-    const total = this.adults + this.children;
-    el.innerHTML = `
-      <div class="guest-selector">
-        <span class="guest-label">Adults</span>
-        <div class="guest-controls">
-          <button type="button" class="btn-adult-dec"${this.adults <= 1 ? ' disabled' : ''}>−</button>
-          <span class="guest-count">${this.adults}</span>
-          <button type="button" class="btn-adult-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
-        </div>
-      </div>
-      <div class="guest-selector">
-        <span class="guest-label">Children</span>
-        <div class="guest-controls">
-          <button type="button" class="btn-child-dec"${this.children <= 0 ? ' disabled' : ''}>−</button>
-          <span class="guest-count">${this.children}</span>
-          <button type="button" class="btn-child-inc"${total >= this.maxGuests ? ' disabled' : ''}>+</button>
-        </div>
-      </div>
-    `;
-  }
 
   _drawSummary() {
     const ci = this.container.querySelector('.checkin-val');
@@ -281,28 +253,6 @@ class HomestayCalendar {
 
     grid.addEventListener('mouseleave', () => this._clearHover());
 
-    // Guest controls (event delegation on container)
-    this.container.addEventListener('click', (e) => {
-      const total = this.adults + this.children;
-
-      if (e.target.classList.contains('btn-adult-inc') && total < this.maxGuests) {
-        this.adults++;
-        this._drawGuests();
-        this._notify();
-      } else if (e.target.classList.contains('btn-adult-dec') && this.adults > 1) {
-        this.adults--;
-        this._drawGuests();
-        this._notify();
-      } else if (e.target.classList.contains('btn-child-inc') && total < this.maxGuests) {
-        this.children++;
-        this._drawGuests();
-        this._notify();
-      } else if (e.target.classList.contains('btn-child-dec') && this.children > 0) {
-        this.children--;
-        this._drawGuests();
-        this._notify();
-      }
-    });
   }
 
   _clearHover() {
