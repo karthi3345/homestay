@@ -327,6 +327,17 @@ document.addEventListener('DOMContentLoaded', () => {
           heroPane.classList.remove('show-booking');
         }
       }
+
+      // Auto-scroll to tab content on mobile/tablet view
+      if (window.innerWidth <= 1024) {
+        const overviewCard = document.getElementById('overviewCard');
+        if (overviewCard) {
+          // Small delay to allow tab display transition to start
+          setTimeout(() => {
+            overviewCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 50);
+        }
+      }
     });
   });
 
@@ -476,6 +487,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reset selection
     whatsappBookBtn.disabled = true;
     whatsappBookBtn.classList.remove('active');
+    
+    const proceedContainer = document.getElementById('mobileProceedContainer');
+    if (proceedContainer) proceedContainer.classList.remove('show');
   }
 
   // Full Canvas Random Background Setup
@@ -494,6 +508,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (checkIn && checkOut) {
       whatsappBookBtn.disabled = false;
       whatsappBookBtn.classList.add('active');
+      
+      const proceedContainer = document.getElementById('mobileProceedContainer');
+      const proceedBtn = document.getElementById('mobileProceedBtn');
+      if (proceedContainer && proceedBtn && window.innerWidth <= 1024) {
+        proceedContainer.classList.add('show');
+        proceedBtn.onclick = () => {
+          const bookingForm = document.querySelector('.hero-booking-form');
+          if (bookingForm) {
+            proceedContainer.classList.remove('show'); // Hide it when they click it
+            bookingForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+              const nameInput = document.getElementById('guestName');
+              if (nameInput) nameInput.focus();
+            }, 600); // Wait for smooth scroll to finish
+          }
+        };
+      }
       
       // Calculate display dates
       const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };

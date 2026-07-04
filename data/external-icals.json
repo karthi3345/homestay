@@ -7,7 +7,7 @@
         "name": "Bookings.com",
         "url": "https://ical.booking.com/v1/export?t=1ba6c6c9-c14a-41c7-a24b-c0ac7b274a0d",
         "enabled": true,
-        "lastSync": "2026-07-03T17:53:26.484Z",
+        "lastSync": "2026-07-04T05:34:01.190Z",
         "status": "Success"
       },
       {
@@ -15,7 +15,7 @@
         "name": "MakeMyTrip",
         "url": "https://ingo-content-clientbackend.goibibo.com/public/ecs/downloadCalendar/45002190434?bid=58939313be300c9a4718716a444b034c",
         "enabled": true,
-        "lastSync": "2026-07-03T17:53:26.644Z",
+        "lastSync": "2026-07-04T05:34:01.407Z",
         "status": "Success"
       },
       {
@@ -23,7 +23,7 @@
         "name": "AirBNB",
         "url": "https://www.airbnb.co.in/calendar/ical/1703460835408660660.ics?t=9008ead6bcfd49438661e74aedc59536",
         "enabled": true,
-        "lastSync": "2026-07-03T17:53:27.145Z",
+        "lastSync": "2026-07-04T05:34:01.956Z",
         "status": "Success"
       },
       {
@@ -31,7 +31,7 @@
         "name": "Agoda",
         "url": "https://ycs.agoda.com/en-us/api/ari/icalendar?key=XcBNwwsfi8q61H2KfunickFsJ0ainOT1",
         "enabled": true,
-        "lastSync": "2026-07-03T17:53:27.304Z",
+        "lastSync": "2026-07-04T05:34:02.202Z",
         "status": "Success"
       }
     ]
