@@ -593,6 +593,9 @@ setInterval(async () => {
 //  GET /admin → Serve the protected admin UI
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/admin', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Expires', '-1');
+  res.setHeader('Pragma', 'no-cache');
   const properties = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
   const propertyOptions = properties.map(p =>
     `<option value="${p.id}">${p.name}</option>`
@@ -790,9 +793,11 @@ app.get('/admin', (req, res) => {
 <body>
 
 <header>
-  <img src="/assets/logo/volg-logo-main.png" alt="VOLGO" class="admin-logo">
-  <div class="logo-divider"></div>
-  <div class="header-title">Booking Admin — Availability Manager</div>
+  <div style="display: flex; align-items: center;">
+    <img src="/assets/logo/volg-logo-main.png" alt="VOLGO" class="admin-logo">
+    <div class="logo-divider"></div>
+    <div class="header-title">Booking Admin — Availability Manager</div>
+  </div>
 </header>
 
 <div class="container">
@@ -1338,9 +1343,98 @@ app.get('/admin', (req, res) => {
   // Load everything on startup
   function loadAll() {
     loadPeriods();
+    loadPricing();
     loadExternalIcal();
     loadPendingRequests();
-    loadPricing();
+    
+    // Start background polling for new requests every 3 seconds for near-instant updates
+    setInterval(pollForNewRequests, 3000);
+  }
+
+  // --- Browser Notifications & Audio Alert System ---
+  let knownRequestIds = new Set();
+  let isFirstLoad = true;
+  let audioContextUnlocked = false;
+
+  // Request Notification permission automatically
+  if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+
+  // Unlock AudioContext on first interaction
+  function unlockAudio() {
+    if (audioContextUnlocked) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      osc.connect(ctx.destination);
+      osc.start(0);
+      osc.stop(0.001); // Tiny silent beep to unlock
+      audioContextUnlocked = true;
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+    } catch(e) {}
+  }
+  document.addEventListener('click', unlockAudio);
+  document.addEventListener('keydown', unlockAudio);
+
+  function playBeep(volume = 1) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+      
+      setTimeout(() => {
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1200, ctx.currentTime);
+        gain2.gain.setValueAtTime(volume, ctx.currentTime);
+        osc2.start();
+        osc2.stop(ctx.currentTime + 0.5);
+      }, 300);
+    } catch(e) { console.error("Audio beep failed", e); }
+  }
+
+  async function pollForNewRequests() {
+    try {
+      const res = await fetch('/api/pending-requests');
+      const requests = await res.json();
+      
+      let hasNew = false;
+      requests.forEach(r => {
+        if (!knownRequestIds.has(r.id)) {
+          knownRequestIds.add(r.id);
+          
+          if (!isFirstLoad) {
+            hasNew = true;
+            playBeep();
+            if ("Notification" in window && Notification.permission === "granted") {
+              new Notification("New Booking Request!", {
+                body: r.guestName + " requested dates for " + r.homestayName + ".",
+                icon: "/assets/logo/volg-logo-main.png"
+              });
+            }
+          }
+        }
+      });
+
+      if (hasNew) {
+        loadPendingRequests();
+      }
+      isFirstLoad = false;
+    } catch(err) {
+      console.error("Polling error", err);
+    }
   }
 
   loadAll();

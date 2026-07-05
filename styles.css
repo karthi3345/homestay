@@ -611,6 +611,12 @@ body {
   pointer-events: auto;
 }
 
+/* ── Name & Phone Placeholder Opacity ── */
+#guestName::placeholder,
+#guestPhone::placeholder {
+  opacity: 0.5;
+}
+
 .calendar-modal-box {
   width: 90%;
   max-width: 400px;
