@@ -629,7 +629,17 @@ app.get('/admin', (req, res) => {
     .header-title { font-size: 14px; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
 
     /* ── Layout ── */
-    .container { max-width: 820px; margin: 0 auto; padding: 40px 24px 0; }
+    .container { max-width: 1400px; width: 95%; margin: 0 auto; padding: 40px 24px 0; }
+    
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
 
     /* ── Card ── */
     .card {
@@ -637,7 +647,7 @@ app.get('/admin', (req, res) => {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 32px;
-      margin-bottom: 24px;
+      margin-bottom: 0; /* Let grid handle gap */
       box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .card-title {
@@ -752,26 +762,29 @@ app.get('/admin', (req, res) => {
 
 <div class="container">
   
-  <!-- PENDING REQUESTS -->
-  <div class="card" style="border-top: 2px solid var(--accent);">
-    <div class="card-title">Pending Booking Requests</div>
-    <div id="pendingList">
-      <div class="empty-state">Loading requests...</div>
-    </div>
-  </div>
+  <!-- MASONRY GRID START -->
+  <div class="dashboard-grid">
 
-  <!-- Property selector -->
-  <div class="card">
-    <div class="card-title">Property</div>
-    <div class="form-row full">
-      <div>
-        <label>Select Property</label>
-        <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal(); loadPricing();">
-          ${propertyOptions}
-        </select>
+    <!-- PENDING REQUESTS -->
+    <div class="card" style="border-top: 2px solid var(--accent); display: flex; flex-direction: column; height: 100%;">
+      <div class="card-title">Pending Booking Requests</div>
+      <div id="pendingList" style="flex: 1; overflow-y: auto; max-height: 400px;">
+        <div class="empty-state">Loading requests...</div>
       </div>
     </div>
-  </div>
+
+    <!-- Property selector (Global Context) -->
+    <div class="card" style="border-left: 4px solid var(--accent);">
+      <div class="card-title">Property Management Context</div>
+      <div class="form-row full">
+        <div>
+          <label>Select Property to Manage</label>
+          <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal(); loadPricing();">
+            ${propertyOptions}
+          </select>
+        </div>
+      </div>
+    </div>
 
   <!-- Pricing Settings -->
   <div class="card" id="pricingSettingsCard">
@@ -879,6 +892,8 @@ app.get('/admin', (req, res) => {
       <div id="adminCalendar"></div>
     </div>
   </div>
+  </div>
+  <!-- MASONRY GRID END -->
 
 </div>
 

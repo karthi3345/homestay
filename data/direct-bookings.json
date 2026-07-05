@@ -17,13 +17,6 @@
         "source": "feed-1783048443579"
       },
       {
-        "from": "2026-07-04",
-        "to": "2026-07-05",
-        "note": "[Auto] AirBNB",
-        "external": true,
-        "source": "feed-1783084432509"
-      },
-      {
         "from": "2026-07-05",
         "to": "2026-07-06",
         "note": "[Auto] AirBNB",
@@ -59,8 +52,15 @@
         "source": "feed-1783048443579"
       },
       {
-        "from": "2027-07-04",
-        "to": "2027-07-05",
+        "from": "2026-07-19",
+        "to": "2026-07-20",
+        "note": "[Auto] Bookings.com",
+        "external": true,
+        "source": "feed-1783048443579"
+      },
+      {
+        "from": "2027-07-05",
+        "to": "2027-07-06",
         "note": "[Auto] AirBNB",
         "external": true,
         "source": "feed-1783084432509"
