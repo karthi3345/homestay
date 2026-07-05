@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output
+dist/
+
+# ─────────────────────────────────────────────────────────
+# SECURITY: Never commit secrets or private guest data
+# ─────────────────────────────────────────────────────────
+
+# Environment variables (contain email password, admin password)
+.env
+.env.local
+.env.production
+
+# Private guest booking data (contains names, phone numbers)
+data/pending-requests.json
+data/booking-history.json
+data/direct-bookings.json
+data/external-icals.json
+
+# OS files
+.DS_Store
+Thumbs.db

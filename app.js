@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!bgContainer) return;
     const totalImages = 5;
     const randomIdx = Math.floor(Math.random() * totalImages) + 1;
-    bgContainer.style.backgroundImage = `url('assets/bg-optimized/bg-${randomIdx}.png')`;
+    bgContainer.style.backgroundImage = `url('assets/bg-optimized/bg-${randomIdx}.webp')`;
   }
 
   // Handle Date Selection from calendar

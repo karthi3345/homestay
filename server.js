@@ -14,6 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
+import { randomUUID } from 'crypto';
 
 dotenv.config();
 
@@ -26,25 +27,37 @@ const DIST_DIR = path.join(__dirname, 'dist');
 const PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10kb' })); // #8: Prevent oversized payloads
+
+// #9: Public rate limiter applied to all routes before auth
+const publicRateLimit = {};
+setInterval(() => {
+  const now = Date.now();
+  for (const ip in publicRateLimit) {
+    if (now - publicRateLimit[ip].time > 600000) delete publicRateLimit[ip];
+  }
+}, 60000);
+
+function applyRateLimit(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress;
+  if (!publicRateLimit[ip]) publicRateLimit[ip] = { count: 0, time: Date.now() };
+  if (Date.now() - publicRateLimit[ip].time > 600000) { publicRateLimit[ip].count = 0; publicRateLimit[ip].time = Date.now(); }
+  if (publicRateLimit[ip].count >= 60) return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  publicRateLimit[ip].count++;
+  next();
+}
+app.use('/api/', applyRateLimit);
+
+// #3: HTML sanitizer for user-submitted fields
+function sanitizeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public API (No Auth)
 // ─────────────────────────────────────────────────────────────────────────────
-const rateLimit = {};
-setInterval(() => {
-  const now = Date.now();
-  for (const ip in rateLimit) {
-    if (now - rateLimit[ip].time > 600000) delete rateLimit[ip];
-  }
-}, 60000);
-
 app.post('/api/request-booking', (req, res) => {
-  const ip = req.ip || req.socket.remoteAddress;
-  if (!rateLimit[ip]) rateLimit[ip] = { count: 0, time: Date.now() };
-  if (Date.now() - rateLimit[ip].time > 600000) { rateLimit[ip].count = 0; rateLimit[ip].time = Date.now(); }
-  if (rateLimit[ip].count >= 5) return res.status(429).json({error: 'Too many requests. Please try again later.'});
-  rateLimit[ip].count++;
 
   const payload = req.body;
   if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
@@ -69,9 +82,7 @@ app.post('/api/request-booking', (req, res) => {
   if (!fs.existsSync(PENDING_FILE)) fs.writeFileSync(PENDING_FILE, '[]');
   const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
   
-  const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
-  const rand = Math.floor(100 + Math.random() * 900);
-  payload.id = `VH-${dateStr}-${rand}`;
+  payload.id = 'VH-' + randomUUID(); // #5: Cryptographically random, unguessable booking ID
   payload.timestamp = new Date().toISOString();
   
   // Set expiration: 6 hours from now OR check-in time (whichever is earlier)
@@ -80,8 +91,6 @@ app.post('/api/request-booking', (req, res) => {
   
   pending.push(payload);
   fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
-  
-  console.log("Checking email credentials:", process.env.EMAIL_USER, process.env.EMAIL_PASS ? '***' : 'missing');
 
   // Fire and forget email notification
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -93,21 +102,22 @@ app.post('/api/request-booking', (req, res) => {
       }
     });
 
+    const siteUrl = process.env.SITE_URL || 'http://localhost:3000'; // #13: Use SITE_URL in production
     const mailOptions = {
       from: '"Volgo Booking Alert" <' + process.env.EMAIL_USER + '>',
       to: process.env.EMAIL_USER,
-      subject: "🎉 New Booking Request - " + payload.homestayName,
+      subject: "\uD83C\uDF89 New Booking Request - " + sanitizeHtml(payload.homestayName),
       html: "<h2>New Booking Request Received!</h2>" +
-            "<p><strong>Property:</strong> " + payload.homestayName + "</p>" +
-            "<p><strong>Guest Name:</strong> " + payload.guestName + "</p>" +
-            "<p><strong>Phone / WhatsApp:</strong> " + payload.guestPhone + "</p>" +
-            (payload.promoCode ? "<p><strong>Promo Code:</strong> " + payload.promoCode + "</p>" : "") +
-            "<p><strong>Check-in:</strong> " + payload.checkIn + "</p>" +
-            "<p><strong>Check-out:</strong> " + payload.checkOut + "</p>" +
-            "<p><strong>Guests:</strong> " + payload.adults + " Adults, " + payload.children + " Children</p>" +
-            "<p><strong>Note:</strong> " + (payload.note || 'None') + "</p>" +
+            "<p><strong>Property:</strong> " + sanitizeHtml(payload.homestayName) + "</p>" +
+            "<p><strong>Guest Name:</strong> " + sanitizeHtml(payload.guestName) + "</p>" +
+            "<p><strong>Phone / WhatsApp:</strong> " + sanitizeHtml(payload.guestPhone) + "</p>" +
+            (payload.promoCode ? "<p><strong>Promo Code:</strong> " + sanitizeHtml(payload.promoCode) + "</p>" : "") +
+            "<p><strong>Check-in:</strong> " + sanitizeHtml(payload.checkIn) + "</p>" +
+            "<p><strong>Check-out:</strong> " + sanitizeHtml(payload.checkOut) + "</p>" +
+            "<p><strong>Guests:</strong> " + Number(payload.adults) + " Adults, " + Number(payload.children) + " Children</p>" +
+            "<p><strong>Note:</strong> " + sanitizeHtml(payload.note || 'None') + "</p>" +
             "<br/>" +
-            '<a href="http://localhost:3000/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
+            '<a href="' + siteUrl + '/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
     };
 
     transporter.sendMail(mailOptions)
@@ -122,7 +132,7 @@ app.post('/api/request-booking', (req, res) => {
 //  PASSWORD PROTECTION (Basic Auth)
 // ─────────────────────────────────────────────────────────────────────────────
 const authMiddleware = basicAuth({
-  users: { 'admin': 'volgo123' }, // Default username: admin, password: volgo123
+  users: { [process.env.ADMIN_USER || 'admin']: process.env.ADMIN_PASS || 'volgo123' }, // #2: Use env vars
   challenge: true,
   realm: 'Volgo Admin'
 });
@@ -470,6 +480,11 @@ app.post('/api/external-ical/:propertyId/add', async (req, res) => {
   const { name, url } = req.body;
   if (!name || !url) return res.status(400).json({error: 'Name and URL required'});
   
+  // #6: Block SSRF - only allow https:// URLs for external calendars
+  if (!url.startsWith('https://')) {
+    return res.status(400).json({error: 'Only HTTPS URLs are allowed for external calendars.'});
+  }
+  
   if (!fs.existsSync(EXTERNAL_ICAL_FILE)) fs.writeFileSync(EXTERNAL_ICAL_FILE, '[]');
   const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
   
@@ -794,7 +809,7 @@ app.get('/admin', (req, res) => {
 
 <header>
   <div style="display: flex; align-items: center;">
-    <img src="/assets/logo/volg-logo-main.png" alt="VOLGO" class="admin-logo">
+    <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="admin-logo">
     <div class="logo-divider"></div>
     <div class="header-title">Booking Admin — Availability Manager</div>
   </div>
@@ -1421,7 +1436,7 @@ app.get('/admin', (req, res) => {
             if ("Notification" in window && Notification.permission === "granted") {
               new Notification("New Booking Request!", {
                 body: r.guestName + " requested dates for " + r.homestayName + ".",
-                icon: "/assets/logo/volg-logo-main.png"
+                icon: "/assets/logo/volg-logo-main.webp"
               });
             }
           }
@@ -1449,21 +1464,26 @@ app.get('/admin', (req, res) => {
 app.use(express.static(DIST_DIR));
 app.use(express.static(PUBLIC_DIR));
 
-const DATA_DIR = path.join(__dirname, 'data');
+// #15: Safely serve ONLY the public homestay configuration, preventing access to bookings/requests
+app.get('/data/homestays.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'data', 'homestays.json'));
+});
+
 const ASSETS_DIR = path.join(__dirname, 'assets');
-app.use('/data', express.static(DATA_DIR));
+// NOTE: /data is intentionally NOT served as static to protect JSON files (#15)
 app.use('/assets', express.static(ASSETS_DIR));
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Start Server
 // ─────────────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
+  const adminUser = process.env.ADMIN_USER || 'admin';
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(' VOLGO HOMESTAY — Unified Server');
   console.log(`\n  Public Website : http://localhost:${PORT}`);
   console.log(`  Admin Panel    : http://localhost:${PORT}/admin`);
-  console.log('\n  Login credentials for Admin:');
-  console.log('    Username: admin');
-  console.log('    Password: volgo123');
+  console.log(`\n  Login credentials for Admin:`);
+  console.log(`    Username: ${adminUser}`);
+  console.log(`    Password: (set via ADMIN_PASS env var)`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 });
