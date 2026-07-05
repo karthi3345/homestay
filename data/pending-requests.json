@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "homestayId": "volgo-alpine-retreat",
+    "homestayName": "Volgo Alpine Retreat",
+    "checkIn": "Mon, Jul 27, 2026",
+    "checkOut": "Tue, Jul 28, 2026",
+    "adults": 2,
+    "children": 0,
+    "guestName": "wdfdwsfewdf",
+    "guestPhone": "23434534435",
+    "promoCode": "",
+    "note": "",
+    "checkInMs": 1785090600000,
+    "checkOutMs": 1785177000000,
+    "totalAmount": 2700,
+    "id": "VH-20260705-180",
+    "timestamp": "2026-07-05T06:47:07.963Z",
+    "expiresAt": 1783255627963
+  }
+]

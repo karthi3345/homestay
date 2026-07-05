@@ -74,6 +74,10 @@ app.post('/api/request-booking', (req, res) => {
   payload.id = `VH-${dateStr}-${rand}`;
   payload.timestamp = new Date().toISOString();
   
+  // Set expiration: 6 hours from now OR check-in time (whichever is earlier)
+  const sixHoursFromNow = Date.now() + (6 * 60 * 60 * 1000);
+  payload.expiresAt = Math.min(sixHoursFromNow, payload.checkInMs);
+  
   pending.push(payload);
   fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
   
@@ -211,7 +215,27 @@ app.get('/api/periods/:propertyId', (req, res) => {
     regenerateIcal();
   }
 
-  res.json(record.blockedPeriods);
+  const combinedPeriods = [...record.blockedPeriods];
+  
+  // Merge active temporary holds
+  if (fs.existsSync(PENDING_FILE)) {
+    const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+    const activeHolds = pending.filter(p => p.homestayId === req.params.propertyId && (!p.expiresAt || p.expiresAt > Date.now()));
+    
+    activeHolds.forEach(hold => {
+      // Use string dates and force noon UTC to avoid timezone shift on the server
+      const fromDateStr = new Date(hold.checkIn + " 12:00:00 UTC").toISOString().split('T')[0];
+      const toDateStr = new Date(hold.checkOut + " 12:00:00 UTC").toISOString().split('T')[0];
+      
+      combinedPeriods.push({
+        from: fromDateStr,
+        to: toDateStr,
+        note: "Pending (Auto-Hold)"
+      });
+    });
+  }
+
+  res.json(combinedPeriods);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -406,6 +430,8 @@ function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
   // Remove previously imported events from THIS SPECIFIC FEED
   record.blockedPeriods = record.blockedPeriods.filter(p => p.source !== feedId);
   
+  let warning = null;
+
   events.forEach(ev => {
     const startMatch = ev.match(/DTSTART(?:;[^:]+)?:(\d{8})/);
     const endMatch = ev.match(/DTEND(?:;[^:]+)?:(\d{8})/);
@@ -414,15 +440,23 @@ function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
       const e = endMatch[1];
       const from = `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}`;
       const to = `${e.substring(0,4)}-${e.substring(4,6)}-${e.substring(6,8)}`;
-      // Don't import our own generated iCals back (infinite loop safety)
-      if (!ev.includes('@volgo.in') && !ev.includes('@volgohomestay')) {
-        record.blockedPeriods.push({ from, to, note: `[Auto] ${feedName}`, external: true, source: feedId });
+      
+      const days = (new Date(to) - new Date(from)) / 86400000;
+      if (days > 90) {
+        warning = `Warning: A massive block of ${days} days was detected from ${feedName} and was ignored to prevent locking your calendar.`;
+      } else {
+        // Don't import our own generated iCals back (infinite loop safety)
+        if (!ev.includes('@volgo.in') && !ev.includes('@volgohomestay')) {
+          record.blockedPeriods.push({ from, to, note: `[Auto] ${feedName}`, external: true, source: feedId });
+        }
       }
     }
   });
   
   record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
   fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
+  
+  return warning;
 }
 
 app.get('/api/external-ical/:propertyId', (req, res) => {
@@ -539,8 +573,9 @@ setInterval(async () => {
           try {
             const response = await fetch(feed.url);
             if (!response.ok) throw new Error('Bad status');
-            syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
+            const warning = syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
             feed.status = 'Success';
+            feed.warning = warning || null;
             feed.lastSync = new Date().toISOString();
           } catch(e) {
             feed.status = 'Failed';
@@ -762,6 +797,14 @@ app.get('/admin', (req, res) => {
 
 <div class="container">
   
+  <!-- System Notifications -->
+  <div class="card" style="margin-bottom: 24px; border: 2px solid var(--danger); display: none;" id="systemNotificationsCard">
+    <div class="card-title" style="color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 16px;">System Notifications</div>
+    <div id="systemNotificationsList" style="display: flex; flex-direction: column; gap: 12px;">
+      <!-- Alerts injected here -->
+    </div>
+  </div>
+
   <!-- MASONRY GRID START -->
   <div class="dashboard-grid">
 
@@ -1105,12 +1148,20 @@ app.get('/admin', (req, res) => {
     const data = await res.json();
     const feeds = data.feeds || [];
     
+    let warningsHTML = '';
+
     if (!feeds.length) {
       list.innerHTML = '<div class="empty-state">No external calendars configured.</div>';
-      return;
     }
     
     list.innerHTML = feeds.map(f => {
+      if (f.warning) {
+        warningsHTML += '<div style="background: rgba(224, 85, 85, 0.1); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--danger);">' +
+                        '<strong style="color: var(--danger); font-size: 14px;">⚠️ ' + f.name + ' Sync Warning:</strong><br>' +
+                        '<span style="color: var(--text); font-size: 13px;">' + f.warning + '</span>' +
+                        '</div>';
+      }
+
       const d = f.lastSync ? new Date(f.lastSync).toLocaleString() : 'Never';
       const statusBadge = f.status === 'Success' 
         ? '<span style="color:var(--success)">✓ Success</span>' 
@@ -1121,14 +1172,24 @@ app.get('/admin', (req, res) => {
                  '<div class="period-dates">' + f.name + '</div>' +
                  '<div class="period-duration" style="font-family:monospace; margin-top:5px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px;">' + f.url + '</div>' +
                  '<div class="period-note">Last Sync: ' + d + ' &nbsp;|&nbsp; ' + statusBadge + '</div>' +
+                 (f.warning ? '<div class="period-note" style="color:var(--danger); font-weight:bold; margin-top:5px;">' + f.warning + '</div>' : '') +
                '</div>' +
                '<div style="display:flex; gap:8px;">' +
                  '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="syncFeed(\\'' + f.id + '\\')">Sync</button>' +
                  '<button class="btn-delete" style="color:var(--text); border-color:var(--border);" onclick="toggleFeed(\\'' + f.id + '\\')">' + (f.enabled ? 'Disable' : 'Enable') + '</button>' +
                  '<button class="btn-delete" onclick="removeFeed(\\'' + f.id + '\\')">Remove</button>' +
-               '</div>' +
-             '</div>';
+                '</div>' +
+              '</div>';
     }).join('');
+
+    const systemNotificationsCard = document.getElementById('systemNotificationsCard');
+    const systemNotificationsList = document.getElementById('systemNotificationsList');
+    if (warningsHTML !== '') {
+      systemNotificationsList.innerHTML = warningsHTML;
+      systemNotificationsCard.style.display = 'block';
+    } else {
+      systemNotificationsCard.style.display = 'none';
+    }
   }
 
   async function addExternalIcal() {

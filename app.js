@@ -709,6 +709,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const originalText = whatsappBookBtn.querySelector('span').textContent;
         whatsappBookBtn.querySelector('span').textContent = 'Sending...';
 
+        const priceData = window.updatePriceDisplay ? window.updatePriceDisplay() : null;
+        
         const requestPayload = {
           homestayId: currentHomestay.id,
           homestayName: currentHomestay.name,
@@ -721,7 +723,8 @@ document.addEventListener('DOMContentLoaded', () => {
           promoCode,
           note: noteText,
           checkInMs: checkIn.getTime(),
-          checkOutMs: checkOut.getTime()
+          checkOutMs: checkOut.getTime(),
+          totalAmount: priceData ? priceData.total : 0
         };
 
         try {
@@ -733,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           if (res.ok) {
             whatsappBookBtn.querySelector('span').textContent = 'Request Sent!';
-            alert('Thank you. Your booking request has been sent. We\'ll contact you on WhatsApp shortly to confirm availability.');
+            alert('Thank you for your booking! Your dates have been temporarily blocked for 6 hours.\n\nWe will contact you on WhatsApp shortly with the payment details. Once the payment is done, your booking will be permanently confirmed. If payment is not received within 6 hours, the dates will be released.');
             setTimeout(() => {
               whatsappBookBtn.querySelector('span').textContent = originalText;
               whatsappBookBtn.disabled = false;
@@ -896,7 +899,7 @@ document.addEventListener('DOMContentLoaded', () => {
       totalAmtEl.textContent = '₹' + total.toLocaleString('en-IN');
       if (priceContainer) priceContainer.style.display = 'block';
       
-      return { promoApplied, invalidPromo };
+      return { promoApplied, invalidPromo, total };
     }
     return null;
   };
