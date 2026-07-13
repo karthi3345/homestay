@@ -92,74 +92,77 @@ function sanitizeHtml(str) {
 //  Public API (No Auth)
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/request-booking', async (req, res) => {
-
-  const payload = req.body;
-  if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
-    return res.status(400).json({error: 'Invalid phone number format.'});
-  }
-
-  // Check Availability
-  const d1 = new Date(payload.checkInMs);
-  const d2 = new Date(payload.checkOutMs);
-  const fromStr = d1.toISOString().split('T')[0];
-  const toStr = d2.toISOString().split('T')[0];
-  
-  if (true) {
-    const data = (await getBlob('BOOKINGS_FILE'));
-    const record = data.find(b => b.propertyId === payload.homestayId);
-    if (record) {
-      const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
-      if (overlap) return res.status(409).json({error: 'Sorry, these dates have just been booked. Please choose different dates.'});
+  try {
+    const payload = req.body;
+    if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
+      return res.status(400).json({error: 'Invalid phone number format.'});
     }
-  }
 
-  
-  const pending = (await getBlob('PENDING_FILE'));
-  
-  payload.id = 'VH-' + randomUUID(); // #5: Cryptographically random, unguessable booking ID
-  payload.timestamp = new Date().toISOString();
-  
-  // Set expiration: 6 hours from now OR check-in time (whichever is earlier)
-  const sixHoursFromNow = Date.now() + (6 * 60 * 60 * 1000);
-  payload.expiresAt = Math.min(sixHoursFromNow, payload.checkInMs);
-  
-  pending.push(payload);
-  await setBlob('PENDING_FILE', pending);
-
-  // Fire and forget email notification
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+    // Check Availability
+    const d1 = new Date(payload.checkInMs);
+    const d2 = new Date(payload.checkOutMs);
+    const fromStr = d1.toISOString().split('T')[0];
+    const toStr = d2.toISOString().split('T')[0];
+    
+    if (true) {
+      const data = (await getBlob('BOOKINGS_FILE'));
+      const record = data.find(b => b.propertyId === payload.homestayId);
+      if (record) {
+        const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
+        if (overlap) return res.status(409).json({error: 'Sorry, these dates have just been booked. Please choose different dates.'});
       }
-    });
+    }
 
-    const siteUrl = process.env.SITE_URL || 'http://localhost:3000'; // #13: Use SITE_URL in production
-    const mailOptions = {
-      from: '"Volgo Booking Alert" <' + process.env.EMAIL_USER + '>',
-      to: process.env.EMAIL_USER,
-      subject: "\uD83C\uDF89 New Booking Request - " + sanitizeHtml(payload.homestayName),
-      html: "<h2>New Booking Request Received!</h2>" +
-            "<p><strong>Property:</strong> " + sanitizeHtml(payload.homestayName) + "</p>" +
-            "<p><strong>Guest Name:</strong> " + sanitizeHtml(payload.guestName) + "</p>" +
-            "<p><strong>Phone / WhatsApp:</strong> " + sanitizeHtml(payload.guestPhone) + "</p>" +
-            (payload.promoCode ? "<p><strong>Promo Code:</strong> " + sanitizeHtml(payload.promoCode) + "</p>" : "") +
-            "<p><strong>Check-in:</strong> " + sanitizeHtml(payload.checkIn) + "</p>" +
-            "<p><strong>Check-out:</strong> " + sanitizeHtml(payload.checkOut) + "</p>" +
-            "<p><strong>Guests:</strong> " + Number(payload.adults) + " Adults, " + Number(payload.children) + " Children</p>" +
-            "<p><strong>Note:</strong> " + sanitizeHtml(payload.note || 'None') + "</p>" +
-            "<br/>" +
-            '<a href="' + siteUrl + '/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
-    };
+    const pending = (await getBlob('PENDING_FILE'));
+    
+    payload.id = 'VH-' + randomUUID(); // #5: Cryptographically random, unguessable booking ID
+    payload.timestamp = new Date().toISOString();
+    
+    // Set expiration: 6 hours from now OR check-in time (whichever is earlier)
+    const sixHoursFromNow = Date.now() + (6 * 60 * 60 * 1000);
+    payload.expiresAt = Math.min(sixHoursFromNow, payload.checkInMs);
+    
+    pending.push(payload);
+    await setBlob('PENDING_FILE', pending);
 
-    transporter.sendMail(mailOptions)
-      .then(info => console.log("Email successfully dispatched to Gmail:", info.response))
-      .catch(err => console.error("Email send failed:", err));
+    // Fire and forget email notification
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+
+      const siteUrl = process.env.SITE_URL || 'http://localhost:3000'; // #13: Use SITE_URL in production
+      const mailOptions = {
+        from: '"Volgo Booking Alert" <' + process.env.EMAIL_USER + '>',
+        to: process.env.EMAIL_USER,
+        subject: "\uD83C\uDF89 New Booking Request - " + sanitizeHtml(payload.homestayName),
+        html: "<h2>New Booking Request Received!</h2>" +
+              "<p><strong>Property:</strong> " + sanitizeHtml(payload.homestayName) + "</p>" +
+              "<p><strong>Guest Name:</strong> " + sanitizeHtml(payload.guestName) + "</p>" +
+              "<p><strong>Phone / WhatsApp:</strong> " + sanitizeHtml(payload.guestPhone) + "</p>" +
+              (payload.promoCode ? "<p><strong>Promo Code:</strong> " + sanitizeHtml(payload.promoCode) + "</p>" : "") +
+              "<p><strong>Check-in:</strong> " + sanitizeHtml(payload.checkIn) + "</p>" +
+              "<p><strong>Check-out:</strong> " + sanitizeHtml(payload.checkOut) + "</p>" +
+              "<p><strong>Guests:</strong> " + Number(payload.adults) + " Adults, " + Number(payload.children) + " Children</p>" +
+              "<p><strong>Note:</strong> " + sanitizeHtml(payload.note || 'None') + "</p>" +
+              "<br/>" +
+              '<a href="' + siteUrl + '/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
+      };
+
+      transporter.sendMail(mailOptions)
+        .then(info => console.log("Email successfully dispatched to Gmail:", info.response))
+        .catch(err => console.error("Email send failed:", err));
+    }
+
+    res.json({ success: true, id: payload.id });
+  } catch (err) {
+    console.error("Booking request error:", err);
+    res.status(500).json({ error: "Server error: " + err.message });
   }
-
-  res.json({ success: true, id: payload.id });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
