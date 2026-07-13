@@ -26,28 +26,49 @@ const BLOB_FILES = {
   HOMESTAYS_FILE: 'homestays.json' // static, but we can store it in blob if modified, actually homestays is read-only from repo so we can leave it as fs read. Wait, we'll put it in Blob too for consistency, or fallback to fs.
 };
 
+const LOCAL_FILES = {
+  BOOKINGS_FILE: path.join(process.cwd(), 'data', 'direct-bookings.json'),
+  PENDING_FILE: path.join(process.cwd(), 'data', 'pending-requests.json'),
+  HISTORY_FILE: path.join(process.cwd(), 'data', 'booking-history.json'),
+  EXTERNAL_ICAL_FILE: path.join(process.cwd(), 'data', 'external-icals.json'),
+  HOMESTAYS_FILE: path.join(process.cwd(), 'data', 'homestays.json')
+};
+
 async function getBlob(fileKey) {
   try {
     const store = getStore('data');
     let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
     if (!data && fileKey === 'HOMESTAYS_FILE') {
-       data = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'data', 'homestays.json'), 'utf-8'));
+       data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
        await store.setJSON(BLOB_FILES[fileKey], data);
     }
     return data || [];
   } catch(e) { 
     console.error("Blob Fetch Error for", fileKey, e.message); 
-    if (fileKey === 'HOMESTAYS_FILE') {
-      try {
-        return JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'data', 'homestays.json'), 'utf-8'));
-      } catch (err) {}
+    try {
+      if (fs.existsSync(LOCAL_FILES[fileKey])) {
+        return JSON.parse(fs.readFileSync(LOCAL_FILES[fileKey], 'utf-8'));
+      }
+    } catch (err) {
+      console.error("Local file fallback read failed:", err.message);
     }
     return []; 
   }
 }
 async function setBlob(fileKey, data) {
-  const store = getStore('data');
-  await store.setJSON(BLOB_FILES[fileKey], data);
+  try {
+    const store = getStore('data');
+    await store.setJSON(BLOB_FILES[fileKey], data);
+  } catch(e) {
+    console.error("Blob Write Error for", fileKey, e.message);
+    try {
+      const dir = path.dirname(LOCAL_FILES[fileKey]);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(LOCAL_FILES[fileKey], JSON.stringify(data, null, 2));
+    } catch (err) {
+      console.error("Local file fallback write failed:", err.message);
+    }
+  }
 }
 
 
@@ -369,7 +390,6 @@ app.delete('/api/periods/:propertyId/:index', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: get, approve, decline pending requests
 // ─────────────────────────────────────────────────────────────────────────────
-const HISTORY_FILE = path.join(__dirname, 'data', 'booking-history.json');
 async function saveToHistory(reqObj, status) {
   
   const history = (await getBlob('HISTORY_FILE'));
@@ -465,8 +485,6 @@ app.delete('/api/decline-request/:id', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: External Calendar Sync
 // ─────────────────────────────────────────────────────────────────────────────
-const EXTERNAL_ICAL_FILE = path.join(__dirname, 'data', 'external-icals.json');
-
 async function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
   const events = text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
   
