@@ -8,6 +8,8 @@
  */
 
 import express from 'express';
+import serverless from 'serverless-http';
+import { getStore } from '@netlify/blobs';
 import basicAuth from 'express-basic-auth';
 import fs from 'fs';
 import path from 'path';
@@ -18,15 +20,50 @@ import { randomUUID } from 'crypto';
 
 dotenv.config();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BOOKINGS_FILE = path.join(__dirname, 'data', 'direct-bookings.json');
-const HOMESTAYS_FILE = path.join(__dirname, 'data', 'homestays.json');
-const PENDING_FILE = path.join(__dirname, 'data', 'pending-requests.json');
-const PUBLIC_DIR = path.join(__dirname, 'public');
-const DIST_DIR = path.join(__dirname, 'dist');
+// Netlify Blobs Helpers
+const BLOB_FILES = {
+  BOOKINGS_FILE: 'direct-bookings.json',
+  PENDING_FILE: 'pending-requests.json',
+  HISTORY_FILE: 'booking-history.json',
+  EXTERNAL_ICAL_FILE: 'external-icals.json',
+  HOMESTAYS_FILE: 'homestays.json' // static, but we can store it in blob if modified, actually homestays is read-only from repo so we can leave it as fs read. Wait, we'll put it in Blob too for consistency, or fallback to fs.
+};
+
+async function getBlob(fileKey) {
+  try {
+    const store = getStore('data');
+    let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
+    if (!data && fileKey === 'HOMESTAYS_FILE') {
+       data = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'data', 'homestays.json'), 'utf-8'));
+       await store.setJSON(BLOB_FILES[fileKey], data);
+    }
+    return data || [];
+  } catch(e) { 
+    console.error("Blob Fetch Error for", fileKey, e.message); 
+    if (fileKey === 'HOMESTAYS_FILE') {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'data', 'homestays.json'), 'utf-8'));
+      } catch (err) {}
+    }
+    return []; 
+  }
+}
+async function setBlob(fileKey, data) {
+  const store = getStore('data');
+  await store.setJSON(BLOB_FILES[fileKey], data);
+}
+
+
+const ROOT_DIR = process.cwd();
+const BOOKINGS_FILE = path.join(ROOT_DIR, 'data', 'direct-bookings.json');
+const HOMESTAYS_FILE = path.join(ROOT_DIR, 'data', 'homestays.json');
+const PENDING_FILE = path.join(ROOT_DIR, 'data', 'pending-requests.json');
+const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
+const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const PORT = process.env.PORT || 3000;
 
 const app = express();
+app.set('trust proxy', 1); // Enable for Netlify API Gateway
 app.use(express.json({ limit: '10kb' })); // #8: Prevent oversized payloads
 
 // #9: Public rate limiter applied to all routes before auth
@@ -57,7 +94,7 @@ function sanitizeHtml(str) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public API (No Auth)
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/request-booking', (req, res) => {
+app.post('/api/request-booking', async (req, res) => {
 
   const payload = req.body;
   if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
@@ -70,8 +107,8 @@ app.post('/api/request-booking', (req, res) => {
   const fromStr = d1.toISOString().split('T')[0];
   const toStr = d2.toISOString().split('T')[0];
   
-  if (fs.existsSync(BOOKINGS_FILE)) {
-    const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  if (true) {
+    const data = (await getBlob('BOOKINGS_FILE'));
     const record = data.find(b => b.propertyId === payload.homestayId);
     if (record) {
       const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
@@ -79,8 +116,8 @@ app.post('/api/request-booking', (req, res) => {
     }
   }
 
-  if (!fs.existsSync(PENDING_FILE)) fs.writeFileSync(PENDING_FILE, '[]');
-  const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  
+  const pending = (await getBlob('PENDING_FILE'));
   
   payload.id = 'VH-' + randomUUID(); // #5: Cryptographically random, unguessable booking ID
   payload.timestamp = new Date().toISOString();
@@ -90,7 +127,7 @@ app.post('/api/request-booking', (req, res) => {
   payload.expiresAt = Math.min(sixHoursFromNow, payload.checkInMs);
   
   pending.push(payload);
-  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  await setBlob('PENDING_FILE', pending);
 
   // Fire and forget email notification
   if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -158,16 +195,16 @@ function regenerateIcal() {
   // No-op: iCal is now generated dynamically via GET /api/calendar/:propertyId.ics
 }
 
-app.get('/api/calendar/:propertyId.ics', (req, res) => {
+app.get('/api/calendar/:propertyId.ics', async (req, res) => {
   const propertyId = req.params.propertyId;
-  const properties = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
+  const properties = (await getBlob('HOMESTAYS_FILE'));
   const prop = properties.find(p => p.id === propertyId);
   
   if (!prop) return res.status(404).send('Property not found');
   
   let allBlocked = [];
-  if (fs.existsSync(BOOKINGS_FILE)) {
-    allBlocked = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  if (true) {
+    allBlocked = (await getBlob('BOOKINGS_FILE'));
   }
   
   const record = allBlocked.find(b => b.propertyId === propertyId);
@@ -203,8 +240,8 @@ app.get('/api/calendar/:propertyId.ics', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: get blocked periods
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/api/periods/:propertyId', (req, res) => {
-  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+app.get('/api/periods/:propertyId', async (req, res) => {
+  const data = (await getBlob('BOOKINGS_FILE'));
   const record = data.find(b => b.propertyId === req.params.propertyId);
   
   if (!record) return res.json([]);
@@ -221,15 +258,15 @@ app.get('/api/periods/:propertyId', (req, res) => {
 
   // If any were removed, save the file
   if (record.blockedPeriods.length !== originalLength) {
-    fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    await setBlob('BOOKINGS_FILE', data);
     regenerateIcal();
   }
 
   const combinedPeriods = [...record.blockedPeriods];
   
   // Merge active temporary holds
-  if (fs.existsSync(PENDING_FILE)) {
-    const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  if (true) {
+    const pending = (await getBlob('PENDING_FILE'));
     const activeHolds = pending.filter(p => p.homestayId === req.params.propertyId && (!p.expiresAt || p.expiresAt > Date.now()));
     
     activeHolds.forEach(hold => {
@@ -252,36 +289,36 @@ app.get('/api/periods/:propertyId', (req, res) => {
 //  API: add a blocked period
 // ─────────────────────────────────────────────────────────────────────────────
 // Update Pricing Endpoint
-app.post('/api/homestay/:id/pricing', (req, res) => {
+app.post('/api/homestay/:id/pricing', async (req, res) => {
   const { weekday, weekend, promos } = req.body;
   if (typeof weekday !== 'number' || typeof weekend !== 'number') {
     return res.status(400).json({ error: 'Weekday and weekend prices must be numbers.' });
   }
 
-  if (fs.existsSync(HOMESTAYS_FILE)) {
-    const data = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
+  if (true) {
+    const data = (await getBlob('HOMESTAYS_FILE'));
     const record = data.find(b => b.id === req.params.id);
     if (record) {
       record.pricing = { weekday, weekend };
       record.promos = Array.isArray(promos) ? promos : [];
       // Clean up old single promo if it exists
       if (record.promo) delete record.promo;
-      fs.writeFileSync(HOMESTAYS_FILE, JSON.stringify(data, null, 2));
+      await setBlob('HOMESTAYS_FILE', data);
       return res.json({ success: true });
     }
   }
   return res.status(404).json({ error: 'Property not found.' });
 });
 
-app.post('/api/periods/:propertyId', (req, res) => {
+app.post('/api/periods/:propertyId', async (req, res) => {
   const { from, to, note } = req.body;
   if (!from || !to || from >= to) {
     return res.status(400).json({ error: 'Invalid dates. "from" must be before "to".' });
   }
 
   // Warn if overlaps with pending
-  if (fs.existsSync(PENDING_FILE)) {
-    const pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  if (true) {
+    const pending = (await getBlob('PENDING_FILE'));
     const d1 = new Date(from).getTime();
     const d2 = new Date(to).getTime();
     const overlapPending = pending.some(p => p.homestayId === req.params.propertyId && d1 < p.checkOutMs && d2 > p.checkInMs);
@@ -290,7 +327,7 @@ app.post('/api/periods/:propertyId', (req, res) => {
     }
   }
 
-  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  const data = (await getBlob('BOOKINGS_FILE'));
   let record = data.find(b => b.propertyId === req.params.propertyId);
 
   if (!record) {
@@ -306,7 +343,7 @@ app.post('/api/periods/:propertyId', (req, res) => {
   record.blockedPeriods.push({ from, to, ...(note ? { note } : {}) });
   record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
 
-  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  await setBlob('BOOKINGS_FILE', data);
   regenerateIcal();
   res.json({ success: true, periods: record.blockedPeriods });
 });
@@ -314,9 +351,9 @@ app.post('/api/periods/:propertyId', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: remove a blocked period by index
 // ─────────────────────────────────────────────────────────────────────────────
-app.delete('/api/periods/:propertyId/:index', (req, res) => {
+app.delete('/api/periods/:propertyId/:index', async (req, res) => {
   const idx = parseInt(req.params.index, 10);
-  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  const data = (await getBlob('BOOKINGS_FILE'));
   const rec = data.find(b => b.propertyId === req.params.propertyId);
 
   if (!rec || idx < 0 || idx >= rec.blockedPeriods.length) {
@@ -324,7 +361,7 @@ app.delete('/api/periods/:propertyId/:index', (req, res) => {
   }
 
   rec.blockedPeriods.splice(idx, 1);
-  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  await setBlob('BOOKINGS_FILE', data);
   regenerateIcal();
   res.json({ success: true, periods: rec.blockedPeriods });
 });
@@ -333,28 +370,28 @@ app.delete('/api/periods/:propertyId/:index', (req, res) => {
 //  API: get, approve, decline pending requests
 // ─────────────────────────────────────────────────────────────────────────────
 const HISTORY_FILE = path.join(__dirname, 'data', 'booking-history.json');
-function saveToHistory(reqObj, status) {
-  if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, '[]');
-  const history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf-8'));
+async function saveToHistory(reqObj, status) {
+  
+  const history = (await getBlob('HISTORY_FILE'));
   reqObj.status = status;
   reqObj.updatedAt = new Date().toISOString();
   history.push(reqObj);
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+  await setBlob('HISTORY_FILE', history);
 }
 
-app.get('/api/pending-requests', (req, res) => {
-  if (!fs.existsSync(PENDING_FILE)) return res.json([]);
-  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+app.get('/api/pending-requests', async (req, res) => {
+  const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.json([]);
+  let pending = (await getBlob('PENDING_FILE'));
   
   // Auto-expire >24h old requests and save to history
   const now = Date.now();
   const ONE_DAY = 24 * 60 * 60 * 1000;
   const validPending = [];
-  pending.forEach(r => {
-    if ((now - new Date(r.timestamp).getTime()) >= ONE_DAY) saveToHistory(r, 'Expired');
+  for (const r of pending) {
+    if ((now - new Date(r.timestamp).getTime()) >= ONE_DAY) await saveToHistory(r, 'Expired');
     else validPending.push(r);
-  });
-  if (validPending.length !== pending.length) fs.writeFileSync(PENDING_FILE, JSON.stringify(validPending, null, 2));
+  }
+  if (validPending.length !== pending.length) await setBlob('PENDING_FILE', validPending);
   pending = validPending;
   
   // Check for overlaps among pending requests
@@ -370,16 +407,16 @@ app.get('/api/pending-requests', (req, res) => {
   res.json(requestsWithOverlap);
 });
 
-app.post('/api/approve-request/:id', (req, res) => {
+app.post('/api/approve-request/:id', async (req, res) => {
   const id = req.params.id;
-  if (!fs.existsSync(PENDING_FILE)) return res.status(404).json({error: 'Not found'});
-  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.status(404).json({error: 'Not found'});
+  let pending = (await getBlob('PENDING_FILE'));
   const reqObj = pending.find(r => r.id === id);
   
   if (!reqObj) return res.status(404).json({error: 'Request not found'});
   
   // Add to direct-bookings.json
-  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  const data = (await getBlob('BOOKINGS_FILE'));
   let record = data.find(b => b.propertyId === reqObj.homestayId);
   if (!record) {
     record = { propertyId: reqObj.homestayId, blockedPeriods: [] };
@@ -403,25 +440,25 @@ app.post('/api/approve-request/:id', (req, res) => {
     note: '[Approved] ' + reqObj.guestName
   });
   
-  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
+  await setBlob('BOOKINGS_FILE', data);
   
   // Remove from pending and save to history
   pending = pending.filter(r => r.id !== id);
-  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
-  saveToHistory(reqObj, 'Approved');
+  await setBlob('PENDING_FILE', pending);
+  await saveToHistory(reqObj, 'Approved');
   
   res.json({ success: true });
 });
 
-app.delete('/api/decline-request/:id', (req, res) => {
+app.delete('/api/decline-request/:id', async (req, res) => {
   const id = req.params.id;
-  if (!fs.existsSync(PENDING_FILE)) return res.json({success: true});
-  let pending = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf-8'));
+  const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.json({success: true});
+  let pending = (await getBlob('PENDING_FILE'));
   const reqObj = pending.find(r => r.id === id);
-  if (reqObj) saveToHistory(reqObj, 'Declined');
+  if (reqObj) await saveToHistory(reqObj, 'Declined');
   
   pending = pending.filter(r => r.id !== id);
-  fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+  await setBlob('PENDING_FILE', pending);
   res.json({ success: true });
 });
 
@@ -430,10 +467,10 @@ app.delete('/api/decline-request/:id', (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const EXTERNAL_ICAL_FILE = path.join(__dirname, 'data', 'external-icals.json');
 
-function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
+async function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
   const events = text.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || [];
   
-  const data = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+  const data = (await getBlob('BOOKINGS_FILE'));
   let record = data.find(b => b.propertyId === propertyId);
   if (!record) { record = { propertyId, blockedPeriods: [] }; data.push(record); }
   
@@ -464,14 +501,14 @@ function syncIcalTextToProperty(text, propertyId, feedId, feedName) {
   });
   
   record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
-  fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(data, null, 2));
+  await setBlob('BOOKINGS_FILE', data);
   
   return warning;
 }
 
-app.get('/api/external-ical/:propertyId', (req, res) => {
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({ feeds: [] });
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+app.get('/api/external-ical/:propertyId', async (req, res) => {
+  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return res.json({ feeds: [] });
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   const rec = data.find(d => d.propertyId === req.params.propertyId);
   res.json(rec || { feeds: [] });
 });
@@ -485,8 +522,8 @@ app.post('/api/external-ical/:propertyId/add', async (req, res) => {
     return res.status(400).json({error: 'Only HTTPS URLs are allowed for external calendars.'});
   }
   
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) fs.writeFileSync(EXTERNAL_ICAL_FILE, '[]');
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   
   let rec = data.find(d => d.propertyId === req.params.propertyId);
   if (!rec) { rec = { propertyId: req.params.propertyId, feeds: [] }; data.push(rec); }
@@ -495,26 +532,26 @@ app.post('/api/external-ical/:propertyId/add', async (req, res) => {
   const feedId = 'feed-' + Date.now();
   const newFeed = { id: feedId, name, url, enabled: true, lastSync: null, status: 'Pending' };
   rec.feeds.push(newFeed);
-  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  await setBlob('EXTERNAL_ICAL_FILE', data);
   
   // Try immediate sync
   try {
     const response = await fetch(url);
     if (!response.ok) throw new Error('Bad status');
-    syncIcalTextToProperty(await response.text(), req.params.propertyId, feedId, name);
+    await syncIcalTextToProperty(await response.text(), req.params.propertyId, feedId, name);
     newFeed.status = 'Success';
     newFeed.lastSync = new Date().toISOString();
   } catch(e) {
     newFeed.status = 'Failed';
     newFeed.lastSync = new Date().toISOString();
   }
-  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  await setBlob('EXTERNAL_ICAL_FILE', data);
   res.json({success: true});
 });
 
-app.post('/api/external-ical/:propertyId/toggle/:feedId', (req, res) => {
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({success: false});
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+app.post('/api/external-ical/:propertyId/toggle/:feedId', async (req, res) => {
+  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return res.json({success: false});
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   const rec = data.find(d => d.propertyId === req.params.propertyId);
   if (rec && rec.feeds) {
     const feed = rec.feeds.find(f => f.id === req.params.feedId);
@@ -522,41 +559,41 @@ app.post('/api/external-ical/:propertyId/toggle/:feedId', (req, res) => {
       feed.enabled = !feed.enabled;
       if (!feed.enabled) {
         // Remove existing external blocks for this feed when disabled
-        const bData = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+        const bData = (await getBlob('BOOKINGS_FILE'));
         let bRecord = bData.find(b => b.propertyId === req.params.propertyId);
         if (bRecord) {
           bRecord.blockedPeriods = bRecord.blockedPeriods.filter(p => p.source !== feed.id);
-          fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bData, null, 2));
+          await setBlob('BOOKINGS_FILE', bData);
         }
       }
-      fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+      await setBlob('EXTERNAL_ICAL_FILE', data);
     }
   }
   res.json({success: true});
 });
 
-app.delete('/api/external-ical/:propertyId/:feedId', (req, res) => {
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.json({success: false});
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+app.delete('/api/external-ical/:propertyId/:feedId', async (req, res) => {
+  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return res.json({success: false});
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   const rec = data.find(d => d.propertyId === req.params.propertyId);
   if (rec && rec.feeds) {
     rec.feeds = rec.feeds.filter(f => f.id !== req.params.feedId);
-    fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+    await setBlob('EXTERNAL_ICAL_FILE', data);
     
     // Clean up blocks
-    const bData = JSON.parse(fs.readFileSync(BOOKINGS_FILE, 'utf-8'));
+    const bData = (await getBlob('BOOKINGS_FILE'));
     let bRecord = bData.find(b => b.propertyId === req.params.propertyId);
     if (bRecord) {
       bRecord.blockedPeriods = bRecord.blockedPeriods.filter(p => p.source !== req.params.feedId);
-      fs.writeFileSync(BOOKINGS_FILE, JSON.stringify(bData, null, 2));
+      await setBlob('BOOKINGS_FILE', bData);
     }
   }
   res.json({success: true});
 });
 
 app.post('/api/external-ical/:propertyId/sync/:feedId', async (req, res) => {
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return res.status(404).json({error:'No feeds'});
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return res.status(404).json({error:'No feeds'});
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   const rec = data.find(d => d.propertyId === req.params.propertyId);
   if (!rec || !rec.feeds) return res.status(404).json({error:'Not found'});
   const feed = rec.feeds.find(f => f.id === req.params.feedId);
@@ -565,21 +602,21 @@ app.post('/api/external-ical/:propertyId/sync/:feedId', async (req, res) => {
   try {
     const response = await fetch(feed.url);
     if (!response.ok) throw new Error('Bad status');
-    syncIcalTextToProperty(await response.text(), req.params.propertyId, feed.id, feed.name);
+    await syncIcalTextToProperty(await response.text(), req.params.propertyId, feed.id, feed.name);
     feed.status = 'Success';
     feed.lastSync = new Date().toISOString();
   } catch(e) {
     feed.status = 'Failed';
     feed.lastSync = new Date().toISOString();
   }
-  fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  await setBlob('EXTERNAL_ICAL_FILE', data);
   res.json({success: true});
 });
 
 // Background sync every 15 mins
 setInterval(async () => {
-  if (!fs.existsSync(EXTERNAL_ICAL_FILE)) return;
-  const data = JSON.parse(fs.readFileSync(EXTERNAL_ICAL_FILE, 'utf-8'));
+  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return;
+  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
   let changed = false;
   for (const rec of data) {
     if (rec.feeds) {
@@ -588,7 +625,7 @@ setInterval(async () => {
           try {
             const response = await fetch(feed.url);
             if (!response.ok) throw new Error('Bad status');
-            const warning = syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
+            const warning = await syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
             feed.status = 'Success';
             feed.warning = warning || null;
             feed.lastSync = new Date().toISOString();
@@ -601,17 +638,17 @@ setInterval(async () => {
       }
     }
   }
-  if (changed) fs.writeFileSync(EXTERNAL_ICAL_FILE, JSON.stringify(data, null, 2));
+  if (changed) await setBlob('EXTERNAL_ICAL_FILE', data);
 }, 15 * 60 * 1000);
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GET /admin → Serve the protected admin UI
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/admin', (req, res) => {
+app.get('/admin', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Expires', '-1');
   res.setHeader('Pragma', 'no-cache');
-  const properties = JSON.parse(fs.readFileSync(HOMESTAYS_FILE, 'utf-8'));
+  const properties = (await getBlob('HOMESTAYS_FILE'));
   const propertyOptions = properties.map(p =>
     `<option value="${p.id}">${p.name}</option>`
   ).join('');
@@ -619,8 +656,8 @@ app.get('/admin', (req, res) => {
   let calendarStyles = '';
   let calendarJs = '';
   try {
-    const stylesCss = fs.readFileSync(path.join(__dirname, 'styles.css'), 'utf-8');
-    calendarJs = fs.readFileSync(path.join(__dirname, 'calendar.js'), 'utf-8');
+    const stylesCss = fs.readFileSync(path.join(ROOT_DIR, 'styles.css'), 'utf-8');
+    calendarJs = fs.readFileSync(path.join(ROOT_DIR, 'calendar.js'), 'utf-8');
     const startIdx = stylesCss.indexOf('/* Tab: Calendar styling */');
     const endIdx = stylesCss.indexOf('/* Booking Action Area */');
     if (startIdx !== -1 && endIdx !== -1) {
@@ -1465,25 +1502,15 @@ app.use(express.static(DIST_DIR));
 app.use(express.static(PUBLIC_DIR));
 
 // #15: Safely serve ONLY the public homestay configuration, preventing access to bookings/requests
-app.get('/data/homestays.json', (req, res) => {
-  res.sendFile(path.join(__dirname, 'data', 'homestays.json'));
+app.get('/data/homestays.json', async (req, res) => {
+  res.json(await getBlob('HOMESTAYS_FILE'));
 });
 
-const ASSETS_DIR = path.join(__dirname, 'assets');
+const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 // NOTE: /data is intentionally NOT served as static to protect JSON files (#15)
 app.use('/assets', express.static(ASSETS_DIR));
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Start Server
 // ─────────────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  const adminUser = process.env.ADMIN_USER || 'admin';
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(' VOLGO HOMESTAY — Unified Server');
-  console.log(`\n  Public Website : http://localhost:${PORT}`);
-  console.log(`  Admin Panel    : http://localhost:${PORT}/admin`);
-  console.log(`\n  Login credentials for Admin:`);
-  console.log(`    Username: ${adminUser}`);
-  console.log(`    Password: (set via ADMIN_PASS env var)`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-});
+export const handler = serverless(app);
