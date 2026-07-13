@@ -34,9 +34,22 @@ const LOCAL_FILES = {
   HOMESTAYS_FILE: path.join(process.cwd(), 'data', 'homestays.json')
 };
 
+function getBlobStore() {
+  const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID;
+  const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+  if (siteID && token) {
+    return getStore({
+      name: 'data',
+      siteID,
+      token
+    });
+  }
+  return getStore('data');
+}
+
 async function getBlob(fileKey) {
   try {
-    const store = getStore('data');
+    const store = getBlobStore();
     let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
     if (!data && fileKey === 'HOMESTAYS_FILE') {
        data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
@@ -57,7 +70,7 @@ async function getBlob(fileKey) {
 }
 async function setBlob(fileKey, data) {
   try {
-    const store = getStore('data');
+    const store = getBlobStore();
     await store.setJSON(BLOB_FILES[fileKey], data);
   } catch(e) {
     console.error("Blob Write Error for", fileKey, e.message);
