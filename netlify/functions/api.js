@@ -14,11 +14,8 @@ import basicAuth from 'express-basic-auth';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import { randomUUID } from 'crypto';
-
-dotenv.config();
 
 // Netlify Blobs Helpers
 const BLOB_FILES = {
