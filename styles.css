@@ -68,7 +68,7 @@ body {
   display: grid;
   grid-template-columns: 0.9fr 1.2fr;
   grid-template-rows: 1fr; /* Lock row height to viewport */
-  padding: 40px 60px 20px 60px; /* Uniform outer padding, less on bottom */
+  padding: 68px 60px 20px 60px; /* Uniform outer padding, less on bottom, top adjusted for header */
   gap: 40px;
   box-sizing: border-box;
 }
@@ -1199,7 +1199,7 @@ a.contact-value:hover {
   .viewport-layout {
     display: flex !important;
     flex-direction: column !important;
-    padding: 30px 40px;
+    padding: 68px 40px 30px 40px;
     gap: 30px;
     height: max-content !important;
     min-height: 100vh !important;
@@ -1240,7 +1240,7 @@ a.contact-value:hover {
 /* Mobile Responsive (768px and down) */
 @media (max-width: 768px) {
   .viewport-layout {
-    padding: 20px;
+    padding: 68px 20px 20px 20px;
     gap: 24px;
   }
   
