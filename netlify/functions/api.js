@@ -210,7 +210,12 @@ const authMiddleware = basicAuth({
 
 // Protect the admin routes
 app.use('/admin', authMiddleware);
-app.use('/api', authMiddleware);
+app.use([
+  '/api/pending-requests',
+  '/api/approve-request',
+  '/api/decline-request',
+  '/api/external-ical'
+], authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  iCal generator
@@ -323,7 +328,7 @@ app.get('/api/periods/:propertyId', async (req, res) => {
 //  API: add a blocked period
 // ─────────────────────────────────────────────────────────────────────────────
 // Update Pricing Endpoint
-app.post('/api/homestay/:id/pricing', async (req, res) => {
+app.post('/api/homestay/:id/pricing', authMiddleware, async (req, res) => {
   const { weekday, weekend, promos } = req.body;
   if (typeof weekday !== 'number' || typeof weekend !== 'number') {
     return res.status(400).json({ error: 'Weekday and weekend prices must be numbers.' });
@@ -344,7 +349,7 @@ app.post('/api/homestay/:id/pricing', async (req, res) => {
   return res.status(404).json({ error: 'Property not found.' });
 });
 
-app.post('/api/periods/:propertyId', async (req, res) => {
+app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
   const { from, to, note } = req.body;
   if (!from || !to || from >= to) {
     return res.status(400).json({ error: 'Invalid dates. "from" must be before "to".' });
@@ -385,7 +390,7 @@ app.post('/api/periods/:propertyId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 //  API: remove a blocked period by index
 // ─────────────────────────────────────────────────────────────────────────────
-app.delete('/api/periods/:propertyId/:index', async (req, res) => {
+app.delete('/api/periods/:propertyId/:index', authMiddleware, async (req, res) => {
   const idx = parseInt(req.params.index, 10);
   const data = (await getBlob('BOOKINGS_FILE'));
   const rec = data.find(b => b.propertyId === req.params.propertyId);
