@@ -114,8 +114,6 @@ function applyRateLimit(req, res, next) {
   publicRateLimit[ip].count++;
   next();
 }
-app.use('/api/', applyRateLimit);
-
 // #3: HTML sanitizer for user-submitted fields
 function sanitizeHtml(str) {
   if (typeof str !== 'string') return '';
@@ -125,7 +123,7 @@ function sanitizeHtml(str) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public API (No Auth)
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/request-booking', async (req, res) => {
+app.post('/api/request-booking', applyRateLimit, async (req, res) => {
   try {
     const payload = req.body;
     if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
