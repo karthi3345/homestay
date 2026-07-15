@@ -724,6 +724,8 @@ document.addEventListener('DOMContentLoaded', () => {
           note: noteText,
           checkInMs: checkIn.getTime(),
           checkOutMs: checkOut.getTime(),
+          checkInDate: `${checkIn.getFullYear()}-${String(checkIn.getMonth() + 1).padStart(2, '0')}-${String(checkIn.getDate()).padStart(2, '0')}`,
+          checkOutDate: `${checkOut.getFullYear()}-${String(checkOut.getMonth() + 1).padStart(2, '0')}-${String(checkOut.getDate()).padStart(2, '0')}`,
           totalAmount: priceData ? priceData.total : 0
         };
 
@@ -736,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           if (res.ok) {
             whatsappBookBtn.querySelector('span').textContent = 'Request Sent!';
-            alert('Thank you for your booking! Your dates have been temporarily blocked for 6 hours.\n\nWe will contact you on WhatsApp shortly with the payment details. Once the payment is done, your booking will be permanently confirmed. If payment is not received within 6 hours, the dates will be released.');
+            alert("Thank you for choosing to stay with us! 😊\n\nYour selected dates have been reserved for the next 6 hours while we prepare your booking.\n\nWe'll get in touch with you on WhatsApp shortly with the payment details.\n\nOnce your payment is received, your booking will be confirmed and your reservation will be secured.\n\nIf you're unable to complete the payment within 6 hours, no worries—your reserved dates will simply become available for other guests to book.\n\nWe look forward to hosting you!");
             setTimeout(() => {
               whatsappBookBtn.querySelector('span').textContent = originalText;
               whatsappBookBtn.disabled = false;

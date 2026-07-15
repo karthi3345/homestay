@@ -140,10 +140,8 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
     }
 
     // Check Availability
-    const d1 = new Date(payload.checkInMs);
-    const d2 = new Date(payload.checkOutMs);
-    const fromStr = d1.toISOString().split('T')[0];
-    const toStr = d2.toISOString().split('T')[0];
+    const fromStr = payload.checkInDate || new Date(payload.checkInMs).toISOString().split('T')[0];
+    const toStr = payload.checkOutDate || new Date(payload.checkOutMs).toISOString().split('T')[0];
     
     if (true) {
       const data = (await getBlob('BOOKINGS_FILE'));
