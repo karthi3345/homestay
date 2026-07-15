@@ -35,8 +35,10 @@ const LOCAL_FILES = {
 };
 
 function getBlobStore() {
-  const siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID;
-  const token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+  let siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID;
+  let token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
+  if (siteID) siteID = siteID.trim();
+  if (token) token = token.trim();
   if (siteID && token) {
     return getStore({
       name: 'data',
