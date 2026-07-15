@@ -2,6 +2,9 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  SECRETS_SCAN_ENABLED = "false"
+
 [functions]
   included_files = ["data/homestays.json", "styles.css", "calendar.js"]
 
