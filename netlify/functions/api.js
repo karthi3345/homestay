@@ -196,9 +196,12 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
               '<a href="' + siteUrl + '/admin" style="background:#222; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">Open Admin Panel</a>'
       };
 
-      transporter.sendMail(mailOptions)
-        .then(info => console.log("Email successfully dispatched to Gmail:", info.response))
-        .catch(err => console.error("Email send failed:", err));
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Email successfully dispatched to Gmail:", info.response);
+      } catch (err) {
+        console.error("Email send failed:", err);
+      }
     }
 
     res.json({ success: true, id: payload.id });
@@ -1449,12 +1452,12 @@ app.get('/admin', async (req, res) => {
     loadExternalIcal();
     loadPendingRequests();
     
-    // Start background polling for new requests every 30 seconds only when tab is active
+    // Start background polling for new requests every 10 seconds only when tab is active
     setInterval(() => {
       if (document.visibilityState === 'visible') {
         pollForNewRequests();
       }
-    }, 30000);
+    }, 10000);
   }
 
   // --- Browser Notifications & Audio Alert System ---
