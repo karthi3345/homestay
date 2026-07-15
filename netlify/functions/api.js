@@ -1433,8 +1433,12 @@ app.get('/admin', async (req, res) => {
     loadExternalIcal();
     loadPendingRequests();
     
-    // Start background polling for new requests every 3 seconds for near-instant updates
-    setInterval(pollForNewRequests, 3000);
+    // Start background polling for new requests every 30 seconds only when tab is active
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        pollForNewRequests();
+      }
+    }, 30000);
   }
 
   // --- Browser Notifications & Audio Alert System ---
@@ -1529,16 +1533,9 @@ app.get('/admin', async (req, res) => {
 </html>`);
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Public Website Serving
-// ─────────────────────────────────────────────────────────────────────────────
+// Serve static assets
 app.use(express.static(DIST_DIR));
 app.use(express.static(PUBLIC_DIR));
-
-// #15: Safely serve ONLY the public homestay configuration, preventing access to bookings/requests
-app.get('/data/homestays.json', async (req, res) => {
-  res.json(await getBlob('HOMESTAYS_FILE'));
-});
 
 const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 // NOTE: /data is intentionally NOT served as static to protect JSON files (#15)

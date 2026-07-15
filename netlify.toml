@@ -15,10 +15,7 @@
   to = "/.netlify/functions/api"
   status = 200
 
-[[redirects]]
-  from = "/data/homestays.json"
-  to = "/.netlify/functions/api"
-  status = 200
+
 
 [[redirects]]
   from = "/*"
