@@ -39,6 +39,13 @@ function getBlobStore() {
   let token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
   if (siteID) siteID = siteID.trim();
   if (token) token = token.trim();
+  
+  // Diagnostic logs
+  console.log("DB Init Check: siteID length =", siteID ? siteID.length : 0, 
+              "| token length =", token ? token.length : 0);
+  if (siteID) console.log("siteID snippet:", siteID.substring(0, 4) + "..." + siteID.substring(siteID.length - 4));
+  if (token) console.log("token snippet:", token.substring(0, 4) + "..." + token.substring(token.length - 4));
+
   if (siteID && token) {
     return getStore({
       name: 'data',
