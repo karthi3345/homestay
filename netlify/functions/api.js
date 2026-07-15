@@ -889,11 +889,16 @@ app.get('/admin', async (req, res) => {
 </head>
 <body>
 
-<header>
+<header style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
   <div style="display: flex; align-items: center;">
     <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="admin-logo">
     <div class="logo-divider"></div>
     <div class="header-title">Booking Admin — Availability Manager</div>
+  </div>
+  <div>
+    <button onclick="testNotificationSystem()" class="btn-delete" style="border-color: var(--accent); color: var(--accent); white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 6px;">
+      🔔 Test Notification & Sound
+    </button>
   </div>
 </header>
 
@@ -1460,6 +1465,31 @@ app.get('/admin', async (req, res) => {
   // Request Notification permission automatically
   if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
     Notification.requestPermission();
+  }
+
+  function testNotificationSystem() {
+    playBeep(1);
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notifications.");
+      return;
+    }
+    if (Notification.permission === "granted") {
+      new Notification("Test Notification Works!", {
+        body: "Your browser notifications are fully active.",
+        icon: "/assets/logo/volg-logo-main.webp"
+      });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification("Test Notification Works!", {
+            body: "Your browser notifications are fully active.",
+            icon: "/assets/logo/volg-logo-main.webp"
+          });
+        }
+      });
+    } else {
+      alert("Notifications are blocked. Please click the lock icon in the URL bar to allow notifications.");
+    }
   }
 
   // Unlock AudioContext on first interaction
