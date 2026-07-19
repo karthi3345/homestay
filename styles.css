@@ -99,8 +99,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 0 40px 0 60px; /* Padding inside the header */
-  background: linear-gradient(to right, rgba(255, 200, 0, 1) 0%, rgba(255, 200, 0, 1) 10%, rgba(0, 0, 0, 0.2) 50%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(to right, rgba(255, 200, 0, 1) 0%, rgba(255, 200, 0, 1) 10%, transparent 50%);
+  border-bottom: none;
   border-bottom-right-radius: 24px; /* Soften the edge that hangs in the middle */
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
