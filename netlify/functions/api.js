@@ -10,7 +10,11 @@
 import express from 'express';
 import serverless from 'serverless-http';
 import { getStore } from '@netlify/blobs';
-import basicAuth from 'express-basic-auth';
+import jwt from 'jsonwebtoken';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import cors from 'cors';
+import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -104,7 +108,98 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 app.set('trust proxy', 1); // Enable for Netlify API Gateway
-app.use(express.json({ limit: '10kb' })); // #8: Prevent oversized payloads
+app.use(cookieParser());
+app.use(express.json({ limit: '10kb' }));
+app.use(helmet({
+  contentSecurityPolicy: false // Disabled for simplicity with cross-origin assets (Google Fonts, map embeds)
+}));
+
+// CORS Configuration
+const allowedOrigins = [
+  process.env.SITE_URL || 'http://localhost:3000',
+  'https://volgohomestay.netlify.app'
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.indexOf(origin.trim()) !== -1 || origin.trim().startsWith('http://localhost:')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Blocked by CORS policy'));
+    }
+  },
+  credentials: true
+}));
+
+const JWT_SECRET = process.env.JWT_SECRET || 'volgo-super-secret-key-change-this-in-production';
+
+// Zod Input Validation Schemas
+const bookingRequestSchema = z.object({
+  homestayId: z.string().min(1),
+  homestayName: z.string().min(1),
+  checkIn: z.string().min(1),
+  checkOut: z.string().min(1),
+  adults: z.number().int().min(1),
+  children: z.number().int().min(0),
+  guestName: z.string().min(2).max(100),
+  guestPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
+  promoCode: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
+  checkInMs: z.number().int().positive(),
+  checkOutMs: z.number().int().positive(),
+  checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  totalAmount: z.number().nonnegative()
+});
+
+const pricingSchema = z.object({
+  weekday: z.number().nonnegative(),
+  weekend: z.number().nonnegative(),
+  promos: z.array(z.object({
+    code: z.string().min(1),
+    discount: z.number().min(1).max(100)
+  })).optional().nullable()
+});
+
+const blockedPeriodSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().max(200).optional().nullable()
+});
+
+// Audit Logging Helper
+async function logAdminAction(username, ip, action, details) {
+  try {
+    const history = await getBlob('HISTORY_FILE');
+    history.push({
+      id: 'LOG-' + randomUUID(),
+      timestamp: new Date().toISOString(),
+      username,
+      ip,
+      action,
+      details
+    });
+    await setBlob('HISTORY_FILE', history);
+  } catch (err) {
+    console.error("Audit log write failed:", err.message);
+  }
+}
+
+// Session JWT Verification Middleware
+function authMiddleware(req, res, next) {
+  const token = req.cookies.volgo_session;
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized: No session token found.' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.adminUser = decoded.username;
+    next();
+  } catch (err) {
+    res.clearCookie('volgo_session');
+    return res.status(401).json({ error: 'Unauthorized: Session expired or invalid.' });
+  }
+}
+
 
 // #9: Public rate limiter applied to all routes before auth
 const publicRateLimit = {};
@@ -134,10 +229,11 @@ function sanitizeHtml(str) {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/request-booking', applyRateLimit, async (req, res) => {
   try {
-    const payload = req.body;
-    if (!/^\+?[0-9]{10,15}$/.test(payload.guestPhone)) {
-      return res.status(400).json({error: 'Invalid phone number format.'});
+    const parsed = bookingRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid input formatting: ' + parsed.error.issues.map(i => i.message).join(', ') });
     }
+    const payload = parsed.data;
 
     // Check Availability
     const fromStr = payload.checkInDate || new Date(payload.checkInMs).toISOString().split('T')[0];
@@ -210,21 +306,169 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PASSWORD PROTECTION (Basic Auth)
+//  ADMIN AUTHENTICATION & SESSIONS (JWT + MFA)
 // ─────────────────────────────────────────────────────────────────────────────
-const authMiddleware = basicAuth({
-  users: { [process.env.ADMIN_USER || 'admin']: process.env.ADMIN_PASS || 'volgo123' }, // #2: Use env vars
-  challenge: true,
-  realm: 'Volgo Admin'
+
+// Helper to send email OTP
+async function sendOtpEmail(otpCode) {
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // STARTTLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    const mailOptions = {
+      from: '"Volgo Admin Security" <' + process.env.EMAIL_USER + '>',
+      to: process.env.EMAIL_USER,
+      subject: "🔒 Volgo Admin MFA Verification Code",
+      html: "<h2>Admin Panel Login Request</h2>" +
+            "<p>Your 6-digit Multi-Factor Authentication code is:</p>" +
+            "<h1 style='font-size:32px; letter-spacing:5px; background:#f4f4f4; padding:10px 20px; display:inline-block; border-radius:5px; color:#222;'>" + otpCode + "</h1>" +
+            "<p>This code will expire in 5 minutes. If you did not request this code, please change your admin password immediately.</p>"
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log("MFA OTP email dispatched successfully.");
+  } else {
+    console.log("No SMTP configured. OTP Code for dev:", otpCode);
+  }
+}
+
+// Helper to set OTP with local file fallback
+async function setOtp(otpData) {
+  try {
+    const store = getBlobStore();
+    await store.setJSON('admin-otp', otpData);
+  } catch (err) {
+    console.warn("Netlify Blobs setJSON failed, using local fallback for OTP:", err.message);
+    const localPath = path.join(ROOT_DIR, 'data', 'admin-otp.json');
+    const dir = path.dirname(localPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localPath, JSON.stringify(otpData));
+  }
+}
+
+// Helper to get OTP with local file fallback
+async function getOtp() {
+  try {
+    const store = getBlobStore();
+    return await store.getJSON('admin-otp');
+  } catch (err) {
+    console.warn("Netlify Blobs getJSON failed, using local fallback for OTP:", err.message);
+    const localPath = path.join(ROOT_DIR, 'data', 'admin-otp.json');
+    if (fs.existsSync(localPath)) {
+      return JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+    }
+  }
+  return null;
+}
+
+// Helper to delete OTP with local file fallback
+async function deleteOtp() {
+  try {
+    const store = getBlobStore();
+    await store.delete('admin-otp');
+  } catch (err) {
+    const localPath = path.join(ROOT_DIR, 'data', 'admin-otp.json');
+    if (fs.existsSync(localPath)) {
+      try { fs.unlinkSync(localPath); } catch (e) {}
+    }
+  }
+}
+
+// POST /api/admin/login
+app.post('/api/admin/login', applyRateLimit, async (req, res) => {
+  const { username, password } = req.body;
+  const targetUser = process.env.ADMIN_USER || 'admin';
+  const targetPass = process.env.ADMIN_PASS || 'volgo123';
+
+  if (username !== targetUser || password !== targetPass) {
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  // Generate 6-digit OTP
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+
+  try {
+    await setOtp({ code: otpCode, expiresAt });
+    await sendOtpEmail(otpCode);
+    res.json({ success: true, mfaRequired: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal system error initializing MFA.' });
+  }
 });
 
-// Protect the admin routes
-app.use('/admin', authMiddleware);
+// POST /api/admin/verify-otp
+app.post('/api/admin/verify-otp', applyRateLimit, async (req, res) => {
+  const { otp } = req.body;
+  if (!otp || typeof otp !== 'string') {
+    return res.status(400).json({ error: 'Verification code is required.' });
+  }
+
+  try {
+    const mfaData = await getOtp();
+    
+    if (!mfaData || mfaData.code !== otp.trim()) {
+      return res.status(401).json({ error: 'Invalid verification code.' });
+    }
+
+    if (Date.now() > mfaData.expiresAt) {
+      await deleteOtp();
+      return res.status(401).json({ error: 'Verification code has expired.' });
+    }
+
+    // Clear active OTP
+    await deleteOtp();
+
+    // Create session JWT
+    const token = jwt.sign({ username: process.env.ADMIN_USER || 'admin' }, JWT_SECRET, { expiresIn: '2h' });
+
+    // Set secure HttpOnly cookie
+    res.cookie('volgo_session', token, {
+      httpOnly: true,
+      secure: true, // Always true in prod (Netlify forces HTTPS)
+      sameSite: 'strict',
+      maxAge: 2 * 60 * 60 * 1000 // 2 hours
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'MFA verification failed.' });
+  }
+});
+
+// GET /api/admin/check-session
+app.get('/api/admin/check-session', (req, res) => {
+  const token = req.cookies.volgo_session;
+  if (!token) return res.json({ authenticated: false });
+  try {
+    jwt.verify(token, JWT_SECRET);
+    res.json({ authenticated: true });
+  } catch (e) {
+    res.clearCookie('volgo_session');
+    res.json({ authenticated: false });
+  }
+});
+
+// POST /api/admin/logout
+app.post('/api/admin/logout', (req, res) => {
+  res.clearCookie('volgo_session');
+  res.json({ success: true });
+});
+
+// Protect the API routes with JWT middleware
 app.use([
   '/api/pending-requests',
   '/api/approve-request',
   '/api/decline-request',
-  '/api/external-ical'
+  '/api/external-ical',
+  '/api/homestay/:propertyId/pricing'
 ], authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,10 +583,12 @@ app.get('/api/periods/:propertyId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Update Pricing Endpoint
 app.post('/api/homestay/:id/pricing', authMiddleware, async (req, res) => {
-  const { weekday, weekend, promos } = req.body;
-  if (typeof weekday !== 'number' || typeof weekend !== 'number') {
-    return res.status(400).json({ error: 'Weekday and weekend prices must be numbers.' });
+  const parsed = pricingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid input formatting: ' + parsed.error.issues.map(i => i.message).join(', ') });
   }
+  const { weekday, weekend, promos } = parsed.data;
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'UPDATE_PRICING', { propertyId: req.params.id, weekday, weekend, promosCount: promos ? promos.length : 0 });
 
   if (true) {
     const data = (await getBlob('HOMESTAYS_FILE'));
@@ -360,8 +606,13 @@ app.post('/api/homestay/:id/pricing', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
-  const { from, to, note } = req.body;
-  if (!from || !to || from >= to) {
+  const parsed = blockedPeriodSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid input formatting: ' + parsed.error.issues.map(i => i.message).join(', ') });
+  }
+  const { from, to, note } = parsed.data;
+
+  if (from >= to) {
     return res.status(400).json({ error: 'Invalid dates. "from" must be before "to".' });
   }
 
@@ -393,6 +644,7 @@ app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
   record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
 
   await setBlob('BOOKINGS_FILE', data);
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'ADD_BLOCKED_PERIOD', { propertyId: req.params.propertyId, from, to, note });
   regenerateIcal();
   res.json({ success: true, periods: record.blockedPeriods });
 });
@@ -409,8 +661,10 @@ app.delete('/api/periods/:propertyId/:index', authMiddleware, async (req, res) =
     return res.status(404).json({ error: 'Period not found.' });
   }
 
+  const removedPeriod = rec.blockedPeriods[idx];
   rec.blockedPeriods.splice(idx, 1);
   await setBlob('BOOKINGS_FILE', data);
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'REMOVE_BLOCKED_PERIOD', { propertyId: req.params.propertyId, period: removedPeriod });
   regenerateIcal();
   res.json({ success: true, periods: rec.blockedPeriods });
 });
@@ -455,7 +709,7 @@ app.get('/api/pending-requests', async (req, res) => {
   res.json(requestsWithOverlap);
 });
 
-app.post('/api/approve-request/:id', async (req, res) => {
+app.post('/api/approve-request/:id', authMiddleware, async (req, res) => {
   const id = req.params.id;
   const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.status(404).json({error: 'Not found'});
   let pending = (await getBlob('PENDING_FILE'));
@@ -494,16 +748,20 @@ app.post('/api/approve-request/:id', async (req, res) => {
   pending = pending.filter(r => r.id !== id);
   await setBlob('PENDING_FILE', pending);
   await saveToHistory(reqObj, 'Approved');
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'APPROVE_REQUEST', { requestId: id, guestName: reqObj.guestName, checkIn: reqObj.checkInDate, checkOut: reqObj.checkOutDate });
   
   res.json({ success: true });
 });
 
-app.delete('/api/decline-request/:id', async (req, res) => {
+app.delete('/api/decline-request/:id', authMiddleware, async (req, res) => {
   const id = req.params.id;
   const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.json({success: true});
   let pending = (await getBlob('PENDING_FILE'));
   const reqObj = pending.find(r => r.id === id);
-  if (reqObj) await saveToHistory(reqObj, 'Declined');
+  if (reqObj) {
+    await saveToHistory(reqObj, 'Declined');
+    await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'DECLINE_REQUEST', { requestId: id, guestName: reqObj.guestName, checkIn: reqObj.checkInDate, checkOut: reqObj.checkOutDate });
+  }
   
   pending = pending.filter(r => r.id !== id);
   await setBlob('PENDING_FILE', pending);
@@ -686,6 +944,15 @@ setInterval(async () => {
   }
   if (changed) await setBlob('EXTERNAL_ICAL_FILE', data);
 }, 15 * 60 * 1000);
+
+app.get('/api/admin/history', authMiddleware, async (req, res) => {
+  try {
+    const history = await getBlob('HISTORY_FILE');
+    res.json(history || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve audit log history.' });
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GET /admin → Serve the protected admin UI
@@ -886,19 +1153,118 @@ app.get('/admin', async (req, res) => {
       .split-card { flex-direction: column; gap: 24px !important; }
       .split-card > div { width: 100% !important; }
     }
+    /* ── Login Overlay ── */
+    #loginOverlay {
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+    }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .login-logo {
+      height: 48px;
+      object-fit: contain;
+      align-self: center;
+      margin-bottom: 8px;
+      filter: invert(1) opacity(0.85);
+    }
+    .login-title {
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+    .login-input {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px 16px;
+      font-size: 14px;
+      outline: none;
+      transition: var(--transition);
+    }
+    .login-input:focus {
+      border-color: var(--accent);
+      background: rgba(255,255,255,0.06);
+    }
+    .login-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #0d0e11;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .login-btn:hover {
+      background: var(--accent2);
+    }
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      text-align: center;
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-<header style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+<!-- Secure Login Panel Overlay -->
+<div id="loginOverlay" style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 1000;">
+  <div class="login-card">
+    <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="login-logo">
+    
+    <!-- Step 1: Username & Password -->
+    <div id="loginCredentialsForm" style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="login-title">Admin Authorization</div>
+      <input type="text" id="adminUserField" placeholder="Username" class="login-input">
+      <input type="password" id="adminPassField" placeholder="Password" class="login-input">
+      <div id="loginErrorMsg" class="login-error"></div>
+      <button onclick="submitAdminCredentials()" class="login-btn">Send MFA Code</button>
+    </div>
+
+    <!-- Step 2: 6-digit OTP Code -->
+    <div id="loginOtpForm" style="display: none; flex-direction: column; gap: 16px;">
+      <div class="login-title">Enter MFA Code</div>
+      <div style="font-size: 13px; color: var(--muted); text-align: center;">We sent a 6-digit verification code to your email inbox.</div>
+      <input type="text" id="adminOtpField" placeholder="6-digit Code" class="login-input" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 18px;">
+      <div id="otpErrorMsg" class="login-error"></div>
+      <button onclick="submitMfaOtp()" class="login-btn">Verify & Authorize</button>
+      <button onclick="goBackToLogin()" class="login-btn" style="background: transparent; color: var(--muted); border: 1px solid var(--border);">Back to Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Application Wrap -->
+<div id="appContainer" style="display: none;">
+
+<header style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px;">
   <div style="display: flex; align-items: center;">
     <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="admin-logo">
     <div class="logo-divider"></div>
     <div class="header-title">Booking Admin — Availability Manager</div>
   </div>
-  <div>
+  <div style="display: flex; gap: 12px; align-items: center;">
     <button onclick="testNotificationSystem()" class="btn-delete" style="border-color: var(--accent); color: var(--accent); white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 6px;">
       🔔 Test Notification & Sound
+    </button>
+    <button onclick="submitAdminLogout()" class="btn-delete" style="border-color: var(--danger); color: var(--danger); white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 6px;">
+      🚪 Logout
     </button>
   </div>
 </header>
@@ -1030,6 +1396,14 @@ app.get('/admin', async (req, res) => {
     </details>
   </div>
 
+  <!-- Security Audit Logs -->
+  <div class="card" style="grid-column: span 2; border-top: 2px solid var(--accent); display: flex; flex-direction: column;">
+    <div class="card-title">Security & Action Audit Logs</div>
+    <div id="auditLogList" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px;">
+      <div class="empty-state">Loading audit logs...</div>
+    </div>
+  </div>
+
   <!-- Current Blocking -->
   <div class="card split-card" style="display:flex; gap: 40px; align-items:flex-start;">
     <div style="flex: 1;">
@@ -1046,7 +1420,8 @@ app.get('/admin', async (req, res) => {
   </div>
   <!-- MASONRY GRID END -->
 
-</div>
+</div> <!-- container END -->
+</div> <!-- appContainer END -->
 
 <div id="toast"></div>
 
@@ -1569,7 +1944,151 @@ app.get('/admin', async (req, res) => {
     }
   }
 
-  loadAll();
+  // --- Security: MFA, Session & Audit Log Client Functions ---
+
+  async function loadAuditLogs() {
+    try {
+      const res = await fetch('/api/admin/history');
+      if (!res.ok) return;
+      const logs = await res.json();
+      const list = document.getElementById('auditLogList');
+      if (!logs || !logs.length) {
+        list.innerHTML = '<div class="empty-state">No security logs recorded yet.</div>';
+        return;
+      }
+      // Sort descending (latest first)
+      logs.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
+      list.innerHTML = logs.map(l => {
+        const date = new Date(l.timestamp).toLocaleString('en-IN');
+        let detailsStr = '';
+        try {
+          detailsStr = JSON.stringify(l.details);
+        } catch (e) { detailsStr = l.details; }
+        return '<div class="request-card" style="padding: 12px 16px; margin-bottom: 8px;">' +
+                 '<div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px;">' +
+                   '<span>' + date + '</span>' +
+                   '<span>IP: ' + l.ip + '</span>' +
+                 '</div>' +
+                 '<div style="font-weight: 600; font-size: 13px; color: var(--accent); margin-bottom: 2px;">' +
+                   l.action + ' (' + l.username + ')' +
+                 '</div>' +
+                 '<div style="font-size: 12px; color: var(--text); word-break: break-all; opacity: 0.85;">' +
+                   detailsStr +
+                 '</div>' +
+               '</div>';
+      }).join('');
+    } catch (e) {
+      console.error("Failed to load audit logs", e);
+    }
+  }
+
+  async function submitAdminCredentials() {
+    const username = document.getElementById('adminUserField').value.trim();
+    const password = document.getElementById('adminPassField').value.trim();
+    const errorEl = document.getElementById('loginErrorMsg');
+    errorEl.style.display = 'none';
+
+    if (!username || !password) {
+      errorEl.textContent = 'Please fill out both fields.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Authentication failed.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      if (data.mfaRequired) {
+        document.getElementById('loginCredentialsForm').style.display = 'none';
+        document.getElementById('loginOtpForm').style.display = 'flex';
+      }
+    } catch (err) {
+      errorEl.textContent = 'Error connecting to authorization service.';
+      errorEl.style.display = 'block';
+    }
+  }
+
+  async function submitMfaOtp() {
+    const otp = document.getElementById('adminOtpField').value.trim();
+    const errorEl = document.getElementById('otpErrorMsg');
+    errorEl.style.display = 'none';
+
+    if (!otp || otp.length !== 6) {
+      errorEl.textContent = 'Please enter the 6-digit verification code.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otp })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Invalid verification code.';
+        errorEl.style.display = 'block';
+        return;
+      }
+      
+      // Successfully authenticated!
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('appContainer').style.display = 'block';
+      
+      // Clear inputs
+      document.getElementById('adminUserField').value = '';
+      document.getElementById('adminPassField').value = '';
+      document.getElementById('adminOtpField').value = '';
+      
+      // Load all admin modules
+      loadAll();
+      loadAuditLogs();
+    } catch (err) {
+      errorEl.textContent = 'Verification service error.';
+      errorEl.style.display = 'block';
+    }
+  }
+
+  function goBackToLogin() {
+    document.getElementById('loginOtpForm').style.display = 'none';
+    document.getElementById('loginCredentialsForm').style.display = 'flex';
+    document.getElementById('adminOtpField').value = '';
+  }
+
+  async function submitAdminLogout() {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    window.location.reload();
+  }
+
+  async function initSession() {
+    try {
+      const res = await fetch('/api/admin/check-session');
+      const data = await res.json();
+      if (data.authenticated) {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').style.display = 'block';
+        loadAll();
+        loadAuditLogs();
+      } else {
+        document.getElementById('appContainer').style.display = 'none';
+        document.getElementById('loginOverlay').style.display = 'flex';
+      }
+    } catch (e) {
+      document.getElementById('appContainer').style.display = 'none';
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
+  }
+
+  initSession();
 </script>
 </body>
 </html>`);
