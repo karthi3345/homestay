@@ -64,6 +64,14 @@ async function getBlob(fileKey) {
   try {
     const store = getBlobStore();
     let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
+    
+    // Auto-migrate old property ID if detected in Netlify Blobs
+    if (fileKey === 'HOMESTAYS_FILE' && data && data.some(h => h.id === 'volgo-alpine-retreat')) {
+      console.log("Migrating Netlify Blobs: renaming volgo-alpine-retreat to volgo-homestay-first");
+      data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
+      await store.setJSON(BLOB_FILES[fileKey], data);
+    }
+
     if (!data && fileKey === 'HOMESTAYS_FILE') {
        data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
        await store.setJSON(BLOB_FILES[fileKey], data);
