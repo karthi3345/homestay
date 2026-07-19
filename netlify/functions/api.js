@@ -119,7 +119,10 @@ app.set('trust proxy', 1); // Enable for Netlify API Gateway
 app.use(cookieParser());
 app.use(express.json({ limit: '10kb' }));
 app.use(helmet({
-  contentSecurityPolicy: false // Disabled for simplicity with cross-origin assets (Google Fonts, map embeds)
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false
 }));
 
 // CORS Configuration
