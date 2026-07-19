@@ -19,7 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
-import { randomUUID } from 'crypto';
+import crypto, { randomUUID } from 'crypto';
 
 // Netlify Blobs Helpers
 const BLOB_FILES = {
@@ -404,10 +404,23 @@ app.post('/api/admin/login', applyRateLimit, async (req, res) => {
 
   // Generate 6-digit OTP
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
 
   try {
-    await setOtp({ code: otpCode, expiresAt });
+    // Generate a secure SHA-256 hash of the OTP code
+    const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
+
+    // Create a signed, short-lived JWT token containing the hash
+    const pendingToken = jwt.sign({ hash: otpHash }, JWT_SECRET, { expiresIn: '5m' });
+
+    // Set the token as a secure HttpOnly cookie
+    const isSecure = req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1');
+    res.cookie('volgo_mfa_pending', pendingToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: 'strict',
+      maxAge: 5 * 60 * 1000 // 5 minutes
+    });
+
     await sendOtpEmail(otpCode);
     res.json({ success: true, mfaRequired: true });
   } catch (err) {
@@ -422,28 +435,38 @@ app.post('/api/admin/verify-otp', applyRateLimit, async (req, res) => {
     return res.status(400).json({ error: 'Verification code is required.' });
   }
 
+  const pendingToken = req.cookies.volgo_mfa_pending;
+  if (!pendingToken) {
+    return res.status(401).json({ error: 'MFA session expired. Please log in again.' });
+  }
+
   try {
-    const mfaData = await getOtp();
-    
-    if (!mfaData || mfaData.code !== otp.trim()) {
+    // Decode and verify the pending MFA token
+    let decoded;
+    try {
+      decoded = jwt.verify(pendingToken, JWT_SECRET);
+    } catch (jwtErr) {
+      res.clearCookie('volgo_mfa_pending');
+      return res.status(401).json({ error: 'Verification session expired. Please try again.' });
+    }
+
+    // Verify the submitted OTP against the signed hash
+    const inputHash = crypto.createHash('sha256').update(otp.trim()).digest('hex');
+    if (decoded.hash !== inputHash) {
       return res.status(401).json({ error: 'Invalid verification code.' });
     }
 
-    if (Date.now() > mfaData.expiresAt) {
-      await deleteOtp();
-      return res.status(401).json({ error: 'Verification code has expired.' });
-    }
+    // Clear the pending MFA cookie
+    res.clearCookie('volgo_mfa_pending');
 
-    // Clear active OTP
-    await deleteOtp();
-
-    // Create session JWT
+    // Create the final session JWT
     const token = jwt.sign({ username: process.env.ADMIN_USER || 'admin' }, JWT_SECRET, { expiresIn: '2h' });
 
-    // Set secure HttpOnly cookie
+    // Set secure HttpOnly cookie for session authorization
+    const isSecure = req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1');
     res.cookie('volgo_session', token, {
       httpOnly: true,
-      secure: true, // Always true in prod (Netlify forces HTTPS)
+      secure: isSecure,
       sameSite: 'strict',
       maxAge: 2 * 60 * 60 * 1000 // 2 hours
     });
