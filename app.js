@@ -887,11 +887,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (enteredCode) {
           const matchedPromo = currentHomestay.promos.find(p => p.code.toLowerCase() === enteredCode);
           if (matchedPromo && matchedPromo.discount > 0) {
-            const discountAmt = total * (matchedPromo.discount / 100);
-            total = total - discountAmt;
-            textAmtEl.innerHTML = `<span style="text-decoration: line-through; opacity: 0.6; margin-right: 8px;">₹${(total + discountAmt).toLocaleString('en-IN')}</span>` + 
-                                  `<span style="color: var(--success); font-size: 13px;">-${matchedPromo.discount}%</span>`;
-            promoApplied = true;
+            const checkInDateStr = checkIn.getFullYear() + '-' + String(checkIn.getMonth()+1).padStart(2,'0') + '-' + String(checkIn.getDate()).padStart(2,'0');
+            const isPromoActive = (!matchedPromo.from || checkInDateStr >= matchedPromo.from) && 
+                                  (!matchedPromo.to || checkInDateStr <= matchedPromo.to);
+            if (isPromoActive) {
+              const discountAmt = total * (matchedPromo.discount / 100);
+              total = total - discountAmt;
+              textAmtEl.innerHTML = `<span style="text-decoration: line-through; opacity: 0.6; margin-right: 8px;">₹${(total + discountAmt).toLocaleString('en-IN')}</span>` + 
+                                    `<span style="color: var(--success); font-size: 13px;">-${matchedPromo.discount}%</span>`;
+              promoApplied = true;
+            } else {
+              invalidPromo = true;
+            }
           } else {
             invalidPromo = true;
           }

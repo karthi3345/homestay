@@ -191,7 +191,9 @@ const pricingSchema = z.object({
   weekend: z.number().nonnegative(),
   promos: z.array(z.object({
     code: z.string().min(1),
-    discount: z.number().min(1).max(100)
+    discount: z.number().min(1).max(100),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
   })).optional().nullable()
 });
 
@@ -317,7 +319,7 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
       const siteUrl = process.env.SITE_URL || 'http://localhost:3000'; // #13: Use SITE_URL in production
       const mailOptions = {
         from: '"Volgo Booking Alert" <' + process.env.EMAIL_USER + '>',
-        to: process.env.EMAIL_USER,
+        to: process.env.EMAIL_RECEIVER || process.env.EMAIL_USER,
         subject: "\uD83C\uDF89 New Booking Request - " + sanitizeHtml(payload.homestayName),
         html: "<h2>New Booking Request Received!</h2>" +
               "<p><strong>Property:</strong> " + sanitizeHtml(payload.homestayName) + "</p>" +
@@ -366,7 +368,7 @@ async function sendOtpEmail(otpCode) {
 
     const mailOptions = {
       from: '"Volgo Admin Security" <' + process.env.EMAIL_USER + '>',
-      to: process.env.EMAIL_USER,
+      to: process.env.EMAIL_RECEIVER || process.env.EMAIL_USER,
       subject: "🔒 Volgo Admin MFA Verification Code",
       html: "<h2>Admin Panel Login Request</h2>" +
             "<p>Your 6-digit Multi-Factor Authentication code is:</p>" +
@@ -1383,7 +1385,7 @@ app.get('/admin', async (req, res) => {
     </div>
     <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
       <div class="card-title" style="margin-bottom: 12px;">Active Promo Codes</div>
-      <div class="form-row" style="align-items: flex-end; margin-bottom: 16px;">
+      <div class="form-row" style="margin-bottom: 12px;">
         <div>
           <label>New Promo Code</label>
           <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20">
@@ -1392,8 +1394,18 @@ app.get('/admin', async (req, res) => {
           <label>Discount (%)</label>
           <input type="number" id="newPromoDiscount" placeholder="e.g. 20">
         </div>
+      </div>
+      <div class="form-row" style="align-items: flex-end; margin-bottom: 16px;">
         <div>
-          <button class="btn btn-primary" onclick="addPromo()" style="width: 100%; height: 42px;">⊕ Add</button>
+          <label>Active From</label>
+          <input type="date" id="newPromoFrom">
+        </div>
+        <div>
+          <label>Active To</label>
+          <input type="date" id="newPromoTo">
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="addPromo()" style="width: 100%; height: 42px; margin-top: 0;">⊕ Add</button>
         </div>
       </div>
       <div id="promoListContainer" class="periods-list">
@@ -1806,9 +1818,18 @@ app.get('/admin', async (req, res) => {
       }
       currentPromos = [];
       if (prop && prop.promos) {
-        currentPromos = JSON.parse(JSON.stringify(prop.promos)); // deep copy
+        currentPromos = JSON.parse(JSON.stringify(prop.promos)).map(p => ({
+          ...p,
+          from: p.from || '2026-01-01',
+          to: p.to || '2030-12-31'
+        }));
       } else if (prop && prop.promo && prop.promo.code) { // legacy fallback
-        currentPromos = [prop.promo];
+        currentPromos = [{
+          code: prop.promo.code,
+          discount: prop.promo.discount,
+          from: '2026-01-01',
+          to: '2030-12-31'
+        }];
       }
       renderPromos();
     }
@@ -1823,8 +1844,10 @@ app.get('/admin', async (req, res) => {
     container.innerHTML = currentPromos.map((p, index) => 
       '<div class="period-row">' +
         '<div>' +
-          '<span style="font-weight: 600; color: var(--accent); font-size: 15px;">' + p.code + '</span>' +
-          '<span style="color: var(--success); font-size: 13px; margin-left: 8px;">' + p.discount + '% OFF</span>' +
+          '<div style="font-weight: 600; color: var(--accent); font-size: 15px;">' + p.code + 
+            '<span style="color: var(--success); font-size: 13px; margin-left: 8px;">' + p.discount + '% OFF</span>' +
+          '</div>' +
+          '<div style="font-size: 12px; color: var(--muted); margin-top: 4px;">Active: ' + p.from + ' to ' + p.to + '</div>' +
         '</div>' +
         '<button class="btn-delete" onclick="removePromo(' + index + ')">Remove</button>' +
       '</div>'
@@ -1834,19 +1857,31 @@ app.get('/admin', async (req, res) => {
   function addPromo() {
     const codeInput = document.getElementById('newPromoCode');
     const discountInput = document.getElementById('newPromoDiscount');
+    const fromInput = document.getElementById('newPromoFrom');
+    const toInput = document.getElementById('newPromoTo');
     const code = codeInput.value.trim();
     const discount = parseFloat(discountInput.value);
+    const from = fromInput.value;
+    const to = toInput.value;
     
     if (!code || isNaN(discount) || discount <= 0 || discount >= 100) {
       return showToast('Please enter a valid code and discount between 1-99%', 'error');
+    }
+    if (!from || !to) {
+      return showToast('Please select the active period dates', 'error');
+    }
+    if (from > to) {
+      return showToast('From date must be before or equal to To date', 'error');
     }
     if (currentPromos.find(p => p.code.toLowerCase() === code.toLowerCase())) {
       return showToast('Promo code already exists', 'error');
     }
     
-    currentPromos.push({ code, discount });
+    currentPromos.push({ code, discount, from, to });
     codeInput.value = '';
     discountInput.value = '';
+    fromInput.value = '';
+    toInput.value = '';
     renderPromos();
   }
 
@@ -2152,6 +2187,17 @@ app.get('/admin', async (req, res) => {
       document.getElementById('loginOverlay').style.display = 'flex';
     }
   }
+
+  // Keybind Enter key on login inputs for convenience
+  document.getElementById('adminUserField').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitAdminCredentials();
+  });
+  document.getElementById('adminPassField').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitAdminCredentials();
+  });
+  document.getElementById('adminOtpField').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitMfaOtp();
+  });
 
   initSession();
 </script>
