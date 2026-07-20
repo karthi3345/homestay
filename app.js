@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initElectricBorder();
 
   // Fetch homestay configuration
-  fetch('data/homestays.json')
+  fetch('/api/homestays')
     .then(res => res.json())
     .then(data => {
       homestays = data;

@@ -259,9 +259,16 @@ function sanitizeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Public API (No Auth)
-// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/homestays
+app.get('/api/homestays', async (req, res) => {
+  try {
+    const data = await getBlob('HOMESTAYS_FILE');
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve homestays data.' });
+  }
+});
+
 app.post('/api/request-booking', applyRateLimit, async (req, res) => {
   try {
     const parsed = bookingRequestSchema.safeParse(req.body);
