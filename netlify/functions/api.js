@@ -127,12 +127,36 @@ app.use(helmet({
 
 // CORS Configuration
 const allowedOrigins = [
-  process.env.SITE_URL || 'http://localhost:3000',
   'https://volgohomestay.netlify.app'
 ];
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.indexOf(origin.trim()) !== -1 || origin.trim().startsWith('http://localhost:')) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    const trimmed = origin.trim();
+    // Allow localhost
+    if (trimmed.startsWith('http://localhost:') || trimmed.startsWith('http://127.0.0.1:')) {
+      callback(null, true);
+      return;
+    }
+    // Allow custom domains and their subdomains (like www.volgo-stays.com)
+    const host = trimmed.replace(/^https?:\/\//, '');
+    if (host.endsWith('volgo-stays.com') || host.endsWith('volgohomestay.in')) {
+      callback(null, true);
+      return;
+    }
+    // Fallback to configured SITE_URL
+    if (process.env.SITE_URL) {
+      const configuredHost = process.env.SITE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      if (host === configuredHost || host.endsWith('.' + configuredHost)) {
+        callback(null, true);
+        return;
+      }
+    }
+    // Fallback to allowed list
+    if (allowedOrigins.indexOf(trimmed) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Blocked by CORS policy'));
