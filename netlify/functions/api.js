@@ -1910,11 +1910,13 @@ app.get('/admin', async (req, res) => {
     fromInput.value = '';
     toInput.value = '';
     renderPromos();
+    updatePricing();
   }
 
   function removePromo(index) {
     currentPromos.splice(index, 1);
     renderPromos();
+    updatePricing();
   }
   
   async function updatePricing() {
