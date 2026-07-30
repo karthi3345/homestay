@@ -8,6 +8,9 @@
 [functions]
   included_files = ["data/homestays.json", "styles.css", "calendar.js"]
 
+[functions.sync]
+  schedule = "*/15 * * * *"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api"

@@ -993,33 +993,51 @@ app.post('/api/external-ical/:propertyId/sync/:feedId', async (req, res) => {
   res.json({success: true});
 });
 
-// Background sync every 15 mins
-setInterval(async () => {
-  const _tEXTERNAL_ICAL_FILE = await getBlob('EXTERNAL_ICAL_FILE'); if (!_tEXTERNAL_ICAL_FILE || _tEXTERNAL_ICAL_FILE.length===0) return;
-  const data = (await getBlob('EXTERNAL_ICAL_FILE'));
-  let changed = false;
-  for (const rec of data) {
-    if (rec.feeds) {
-      for (const feed of rec.feeds) {
-        if (feed.enabled) {
-          try {
-            const response = await fetch(feed.url);
-            if (!response.ok) throw new Error('Bad status');
-            const warning = await syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
-            feed.status = 'Success';
-            feed.warning = warning || null;
-            feed.lastSync = new Date().toISOString();
-          } catch(e) {
-            feed.status = 'Failed';
-            feed.lastSync = new Date().toISOString();
+// GET /api/cron/sync - Triggered by scheduled Netlify Function
+app.get('/api/cron/sync', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const secretToken = process.env.CRON_SECRET || 'volgo-cron-secret-123';
+  if (authHeader !== `Bearer ${secretToken}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const data = await getBlob('EXTERNAL_ICAL_FILE');
+    if (!data || data.length === 0) {
+      return res.json({ success: true, message: 'No feeds configured.' });
+    }
+    
+    let changed = false;
+    for (const rec of data) {
+      if (rec.feeds) {
+        for (const feed of rec.feeds) {
+          if (feed.enabled) {
+            try {
+              const response = await fetch(feed.url);
+              if (!response.ok) throw new Error('Bad status');
+              const warning = await syncIcalTextToProperty(await response.text(), rec.propertyId, feed.id, feed.name);
+              feed.status = 'Success';
+              feed.warning = warning || null;
+              feed.lastSync = new Date().toISOString();
+            } catch(e) {
+              console.error(`Sync failed for feed ${feed.name}:`, e.message);
+              feed.status = 'Failed';
+              feed.lastSync = new Date().toISOString();
+            }
+            changed = true;
           }
-          changed = true;
         }
       }
     }
+    if (changed) {
+      await setBlob('EXTERNAL_ICAL_FILE', data);
+    }
+    res.json({ success: true, syncExecuted: changed });
+  } catch (err) {
+    console.error("Scheduled sync execution failed:", err);
+    res.status(500).json({ error: err.message });
   }
-  if (changed) await setBlob('EXTERNAL_ICAL_FILE', data);
-}, 15 * 60 * 1000);
+});
 
 app.get('/api/admin/history', authMiddleware, async (req, res) => {
   try {
