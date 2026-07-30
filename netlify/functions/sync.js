@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 
 export const handler = async (event, context) => {
   const siteUrl = process.env.SITE_URL || 'https://volgo-stays.com';
