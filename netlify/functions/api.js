@@ -65,11 +65,20 @@ async function getBlob(fileKey) {
     const store = getBlobStore();
     let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
     
-    // Auto-migrate old property ID if detected in Netlify Blobs
-    if (fileKey === 'HOMESTAYS_FILE' && data && data.some(h => h.id === 'volgo-alpine-retreat')) {
-      console.log("Migrating Netlify Blobs: renaming volgo-alpine-retreat to volgo-homestay-first");
-      data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
-      await store.setJSON(BLOB_FILES[fileKey], data);
+    // Auto-migrate if local configuration file is updated or differs in key settings (like phone, capacity, or property ID)
+    if (fileKey === 'HOMESTAYS_FILE' && data) {
+      const localData = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
+      const localPhone = localData[0]?.phone;
+      const localCapacity = localData[0]?.capacity;
+      const blobPhone = data[0]?.phone;
+      const blobCapacity = data[0]?.capacity;
+      const hasOldId = data.some(h => h.id === 'volgo-alpine-retreat');
+      
+      if (hasOldId || blobPhone !== localPhone || blobCapacity !== localCapacity) {
+        console.log("Migrating Netlify Blobs: syncing with updated data/homestays.json configurations");
+        data = localData;
+        await store.setJSON(BLOB_FILES[fileKey], data);
+      }
     }
 
     if (!data && fileKey === 'HOMESTAYS_FILE') {
