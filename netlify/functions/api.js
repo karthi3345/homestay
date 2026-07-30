@@ -75,8 +75,16 @@ async function getBlob(fileKey) {
       const localStr = JSON.stringify(localData);
       
       if (hasOldId || dataStr !== localStr) {
-        console.log("Migrating Netlify Blobs: syncing with updated data/homestays.json configurations");
-        data = localData;
+        console.log("Migrating Netlify Blobs: syncing with updated data/homestays.json configurations (preserving pricing & promos)");
+        const mergedData = localData.map(localHome => {
+          const existingHome = data.find(h => h.id === localHome.id) || {};
+          return {
+            ...localHome,
+            pricing: existingHome.pricing || localHome.pricing,
+            promos: existingHome.promos !== undefined ? existingHome.promos : localHome.promos
+          };
+        });
+        data = mergedData;
         await store.setJSON(BLOB_FILES[fileKey], data);
       }
     }
