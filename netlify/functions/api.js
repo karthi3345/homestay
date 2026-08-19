@@ -647,9 +647,8 @@ app.get('/api/periods/:propertyId', async (req, res) => {
     const activeHolds = pending.filter(p => p.homestayId === req.params.propertyId && (!p.expiresAt || p.expiresAt > Date.now()));
     
     activeHolds.forEach(hold => {
-      // Use string dates and force noon UTC to avoid timezone shift on the server
-      const fromDateStr = new Date(hold.checkIn + " 12:00:00 UTC").toISOString().split('T')[0];
-      const toDateStr = new Date(hold.checkOut + " 12:00:00 UTC").toISOString().split('T')[0];
+      const fromDateStr = hold.checkIn;
+      const toDateStr = hold.checkOut;
       
       combinedPeriods.push({
         from: fromDateStr,
@@ -1551,9 +1550,15 @@ app.get('/admin', async (req, res) => {
   }
 
   function fmtDate(str) {
-    return new Date(str + 'T00:00:00').toLocaleDateString('en-IN', {
-      day: 'numeric', month: 'short', year: 'numeric'
-    });
+    if (!str) return '';
+    const parts = str.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts.map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric'
+      });
+    }
+    return str;
   }
 
   function getPropertyId() { return document.getElementById('propertySelect').value; }
@@ -1572,11 +1577,11 @@ app.get('/admin', async (req, res) => {
     }
     
     list.innerHTML = requests.map(r => {
-      const wNumber = r.guestPhone.replace(/[^+\\d]/g, '');
-      const d1 = new Date(r.checkInMs).toLocaleDateString();
-      const d2 = new Date(r.checkOutMs).toLocaleDateString();
+      const wNumber = r.guestPhone.replace(/[^+\d]/g, '');
+      const d1 = fmtDate(r.checkIn);
+      const d2 = fmtDate(r.checkOut);
       
-      const overlapBadge = r.hasOverlap ? \`<div style="color:var(--danger); font-size:12px; font-weight:600; margin-bottom:8px;">⚠️ Overlaps with another pending request!</div>\` : '';
+      const overlapBadge = r.hasOverlap ? '<div style="color:var(--danger); font-size:12px; font-weight:600; margin-bottom:8px;">⚠️ Overlaps with another pending request!</div>' : '';
       
       return \`
         <div class="request-card">

@@ -566,10 +566,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // convert [{from, to}] into an array of date strings for calendar.js
         const booked = new Set();
         livePeriods.forEach(p => {
-          let curr = new Date(p.from);
-          const end = new Date(p.to);
+          if (!p.from || !p.to) return;
+          const [fy, fm, fd] = p.from.split('-').map(Number);
+          const [ey, em, ed] = p.to.split('-').map(Number);
+          let curr = new Date(fy, fm - 1, fd);
+          const end = new Date(ey, em - 1, ed);
           while (curr < end) {
-            booked.add(curr.toISOString().split('T')[0]);
+            const year = curr.getFullYear();
+            const month = String(curr.getMonth() + 1).padStart(2, '0');
+            const day = String(curr.getDate()).padStart(2, '0');
+            booked.add(`${year}-${month}-${day}`);
             curr.setDate(curr.getDate() + 1);
           }
         });
