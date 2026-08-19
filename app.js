@@ -697,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const guestName = guestNameEl ? guestNameEl.value.trim() : '';
         const guestPhone = guestPhoneEl ? guestPhoneEl.value.trim() : '';
-        const promoCode = promoCodeEl ? promoCodeEl.value.trim() : '';
+        const promoCode = promoCodeEl ? promoCodeEl.value.trim().toUpperCase() : '';
         const noteText = noteEl ? noteEl.value.trim() : '';
 
         if (!guestName || !guestPhone) {
@@ -923,6 +923,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const promoCodeInput = document.getElementById('promoCode');
   const applyPromoBtn = document.getElementById('applyPromoBtn');
   if (promoCodeInput && applyPromoBtn) {
+    promoCodeInput.addEventListener('input', () => {
+      promoCodeInput.value = promoCodeInput.value.toUpperCase();
+    });
     applyPromoBtn.addEventListener('click', () => {
       if (!calendarInstance || !calendarInstance.checkIn || !calendarInstance.checkOut) {
         return alert('Please select your Check-In and Check-Out dates first.');

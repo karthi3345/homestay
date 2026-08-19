@@ -1420,7 +1420,7 @@ app.get('/admin', async (req, res) => {
       <div class="form-row" style="margin-bottom: 12px;">
         <div>
           <label>New Promo Code</label>
-          <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20">
+          <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20" style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
         </div>
         <div>
           <label>Discount (%)</label>
@@ -1897,7 +1897,7 @@ app.get('/admin', async (req, res) => {
     const discountInput = document.getElementById('newPromoDiscount');
     const fromInput = document.getElementById('newPromoFrom');
     const toInput = document.getElementById('newPromoTo');
-    const code = codeInput.value.trim();
+    const code = codeInput.value.trim().toUpperCase();
     const discount = parseFloat(discountInput.value);
     const from = fromInput.value;
     const to = toInput.value;
