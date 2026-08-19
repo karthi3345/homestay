@@ -297,8 +297,8 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
     const payload = parsed.data;
 
     // Check Availability
-    const fromStr = payload.checkInDate || new Date(payload.checkInMs).toISOString().split('T')[0];
-    const toStr = payload.checkOutDate || new Date(payload.checkOutMs).toISOString().split('T')[0];
+    const fromStr = payload.checkIn;
+    const toStr = payload.checkOut;
     
     if (true) {
       const data = (await getBlob('BOOKINGS_FILE'));
@@ -809,10 +809,8 @@ app.post('/api/approve-request/:id', authMiddleware, async (req, res) => {
     data.push(record);
   }
   
-  const d1 = new Date(reqObj.checkInMs);
-  const d2 = new Date(reqObj.checkOutMs);
-  const fromStr = d1.toISOString().split('T')[0];
-  const toStr = d2.toISOString().split('T')[0];
+  const fromStr = reqObj.checkIn;
+  const toStr = reqObj.checkOut;
   
   // FINAL AVAILABILITY CHECK BEFORE APPROVING
   const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
