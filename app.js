@@ -1630,7 +1630,7 @@ document.addEventListener('DOMContentLoaded', () => {
       headerContact.href = `tel:${phone.replace(/[^+\d]/g, '')}`;
       document.getElementById('headerContactText').textContent = phone;
     }
-    const wa = siteSettings.contact?.whatsapp || phone || '918608724109';
+    const wa = siteSettings.contact?.whatsapp || phone || '919500508790';
     const waHref = `https://wa.me/${wa.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Hi VolGO Stays, I would like to enquire about a homestay booking.')}`;
     const floatingWa = document.getElementById('floatingWhatsappBtn');
     if (floatingWa) floatingWa.href = waHref;
@@ -1845,7 +1845,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contact = contactFor(homestay);
 
     // Dynamic WhatsApp Owner link for the selected stay
-    const waNum = (contact.whatsapp || contact.phone || '918608724109').replace(/[^0-9]/g, '');
+    const waNum = (contact.whatsapp || contact.phone || '919500508790').replace(/[^0-9]/g, '');
     const waText = encodeURIComponent(`Hi, I am interested in booking ${homestay.name} in Pondicherry. Could you share details & availability?`);
     const waHref = `https://wa.me/${waNum}?text=${waText}`;
 
