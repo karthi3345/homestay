@@ -1777,12 +1777,12 @@ a.contact-value:hover {
   }
   
   .card-nav {
-    position: sticky;
+    position: sticky !important;
     top: 50px !important;
-    z-index: 999;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    z-index: 100 !important;
+    background: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
@@ -1798,14 +1798,19 @@ a.contact-value:hover {
   }
 
   .card-content-wrapper {
-    padding: 16px 14px 44px !important;
+    padding: 20px 14px 44px !important;
+    position: relative !important;
+    z-index: 1 !important;
   }
 
   .booking-form-title,
   .pane-title {
     font-size: 22px !important;
     line-height: 1.25 !important;
+    margin-top: 4px !important;
     margin-bottom: 16px !important;
+    position: relative !important;
+    z-index: 1 !important;
   }
 
   .booking-rates-banner {
@@ -4981,9 +4986,20 @@ body, button, input, textarea, select {
   z-index: 0 !important;
 }
 
-/* Make sure the card's content sits above it (position: relative; z-index: 1) */
-.border-glow-inner,
-.card-nav,
+.border-glow-inner {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.card-nav {
+  position: sticky !important;
+  top: 50px !important;
+  z-index: 50 !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
 .card-content-wrapper,
 .tab-pane,
 .booking-form-inline {
