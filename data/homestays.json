@@ -2,7 +2,11 @@
   {
     "id": "volgo-homestay-first",
     "name": "Volgo Alpine Retreat",
+    "city": "Pondicherry",
     "tagline": "A premium sanctuary nestled in pristine nature.",
+    "area": "1,200 sq ft",
+    "areaName": "Heritage Town",
+    "thumbnail": "assets/bg-optimized/bg-1.webp",
     "icalUrls": [
       {
         "label": "Airbnb",
@@ -27,9 +31,13 @@
     },
     "promos": [],
     "location": "2nd Floor, No. 11, Perumal Koil Street, Heritage Town",
-    "mapEmbedUrl": "https://maps.google.com/maps?q=2nd%20Floor,%20No.%2011,%20Perumal%20Koil%20Street,%20Heritage%20Town&t=&z=16&ie=UTF8&iwloc=&output=embed",
-    "phone": "+91 95005 08790",
-    "whatsapp": "+919500508790",
+    "coordinates": {
+      "lat": 11.9348,
+      "lng": 79.8298
+    },
+    "mapEmbedUrl": "https://api.maptiler.com/maps/streets-v2/?key=WcnnCW2FgJc0HkV8JWrM#16.5/11.9348/79.8298",
+    "phone": "+91 86087 24109",
+    "whatsapp": "+918608724109",
     "email": "chandru.volgo@gmail.com",
     "icalUrl": "",
     "amenityCategories": [
@@ -204,6 +212,242 @@
       "2026-07-23",
       "2026-07-27",
       "2026-07-28"
-    ]
+    ],
+    "published": true,
+    "nearbyPlaces": [
+      {
+        "name": "Rock Beach (Promenade)",
+        "type": "beach",
+        "lat": 11.9318,
+        "lng": 79.8355,
+        "walkMinutes": null
+      },
+      {
+        "name": "Sri Aurobindo Ashram",
+        "type": "landmark",
+        "lat": 11.9366,
+        "lng": 79.8341,
+        "walkMinutes": null
+      }
+    ],
+    "houseRules": [
+      "We keep quiet hours after 9:00 PM to respect our neighbours.",
+      "The apartment is on the second floor (stairs only).",
+      "Please carry a valid government-issued ID.",
+      "Advance payment is required to confirm your booking.",
+      "Parking is not available on the premises (street parking is available nearby).",
+      "Breakfast is available on request (subject to availability and extra charges).",
+      "Check-in: 2:00 PM | Check-out: 10:00 AM (late checkout is chargeable, subject to availability)."
+    ],
+    "hostName": "Rajachandran",
+    "hostBio": "I love welcoming guests and making them feel at home during their stay. We live nearby, so we're always available if you need any assistance while respecting your privacy. I look forward to hosting you and helping you enjoy the best of Pondicherry."
+  },
+
+  {
+    "id": "volgo-villa-eden-beach",
+    "name": "Pondicherry Villa Homestay",
+    "published": true,
+    "city": "Pondicherry",
+    "tagline": "Ideal for families & group stays (18-20 members) · Spacious 3BHK in Ariyankuppam",
+    "area": "3,200 sq ft",
+    "areaName": "Ariyankuppam",
+    "thumbnail": "/uploads/img-1795500199561-e443aba3.webp",
+    "description": "Welcome to Pondicherry Villa Homestay in Ariyankuppam. A spacious 3BHK private villa ideal for large families and group getaways of 18–20 members. Complete with large car parking, RO water facility, fully equipped kitchen, dining area, refrigerator, washing machine, clean washrooms, and 24×7 room service. Located just 500m from Mangrove forest boating, 800m from Ruby Beach, 1km from Blue Flag Eden Beach, and 1km from Chunnambar Boat House.",
+    "capacity": 20,
+    "bedrooms": 3,
+    "bathrooms": 3,
+    "pricing": {
+      "weekday": 11000,
+      "weekend": 11000
+    },
+    "promos": [],
+    "seasons": [],
+    "bookingMode": "rooms",
+    "wholeLabel": "Whole villa",
+    "roomBooking": {
+      "allowOnWeekends": false
+    },
+    "rooms": [
+      {
+        "id": "balcony-family-bedroom",
+        "name": "Balcony with family bedroom",
+        "description": "Attached bathroom, private balcony · Sleeps 4",
+        "capacity": 4,
+        "price": {
+          "weekday": 4800,
+          "weekend": 4800
+        }
+      },
+      {
+        "id": "family-bedroom",
+        "name": "Family bedroom",
+        "description": "Attached bathroom, spacious family room · Sleeps 4",
+        "capacity": 4,
+        "price": {
+          "weekday": 4300,
+          "weekend": 4300
+        }
+      },
+      {
+        "id": "double-bedroom",
+        "name": "Double bed room",
+        "description": "Attached bathroom, double bed · Sleeps 2",
+        "capacity": 2,
+        "price": {
+          "weekday": 2700,
+          "weekend": 2700
+        }
+      }
+    ],
+    "layoutDetails": [
+      "Spacious 3BHK layout: Balcony with family bedroom (4 people), Family bedroom (4 people), and Double bedroom (2 people)",
+      "Whole villa: ₹11,000 on weekdays, ₹18,000 on weekends",
+      "Morning breakfast available @ ₹200 per person",
+      "Each bedroom features clean washrooms with 24x7 water and hot water facility",
+      "Large private car parking on premises",
+      "Dedicated dining area and fully equipped kitchen"
+    ],
+    "guestInstructions": [
+      "Whole villa booking: ₹11,000 on weekdays, ₹18,000 on weekends.",
+      "Single room bookings on weekdays: Balcony with family bedroom (4 people) @ ₹4,800, Family bedroom (4 people) @ ₹4,300, Double bed room (2 people) @ ₹2,700.",
+      "Morning breakfast available @ ₹200 per person.",
+      "24x7 room service and on-call assistance available.",
+      "RO drinking water facility and fully equipped kitchen for self-cooking."
+    ],
+    "houseRules": [
+      "Please carry a valid government-issued ID for all adult guests.",
+      "Check-in: 2:00 PM | Check-out: 11:00 AM.",
+      "Advance payment is required to confirm your reservation."
+    ],
+    "hostName": "Pondicherry Villa Host",
+    "hostBio": "Dedicated to offering families and large groups a comfortable, memorable stay close to Pondicherry finest beaches and backwaters.",
+    "location": "Ariyankuppam, Pondicherry",
+    "coordinates": {
+      "lat": 11.8952,
+      "lng": 79.814
+    },
+    "nearbyPlaces": [
+      {
+        "name": "Eden Beach",
+        "type": "beach",
+        "lat": 11.8941,
+        "lng": 79.8238,
+        "walkMinutes": 12
+      },
+      {
+        "name": "Ruby Beach",
+        "type": "beach",
+        "lat": 11.9005,
+        "lng": 79.821,
+        "walkMinutes": 10
+      },
+      {
+        "name": "Mangrove Forest Boating",
+        "type": "landmark",
+        "lat": 11.8912,
+        "lng": 79.8115,
+        "walkMinutes": 6
+      },
+      {
+        "name": "Chunnambar Boat House",
+        "type": "landmark",
+        "lat": 11.8842,
+        "lng": 79.8055,
+        "walkMinutes": 12
+      },
+      {
+        "name": "Pondy Ocean Park",
+        "type": "landmark",
+        "lat": 11.8785,
+        "lng": 79.803,
+        "walkMinutes": 24
+      }
+    ],
+    "phone": "+91 86087 24109",
+    "whatsapp": "+918608724109",
+    "email": "chandru.volgo@gmail.com",
+    "amenityCategories": [
+      {
+        "category": "Villa Features",
+        "items": [
+          {
+            "name": "Spacious 3BHK",
+            "icon": "villa"
+          },
+          {
+            "name": "Large Car Parking",
+            "icon": "local_parking"
+          },
+          {
+            "name": "RO Water Facility",
+            "icon": "water_drop"
+          },
+          {
+            "name": "Fully Equipped Kitchen",
+            "icon": "kitchen"
+          },
+          {
+            "name": "Dining Area",
+            "icon": "table_restaurant"
+          },
+          {
+            "name": "Free Wi-Fi",
+            "icon": "wifi"
+          },
+          {
+            "name": "Refrigerator",
+            "icon": "kitchen"
+          },
+          {
+            "name": "Washing Machine",
+            "icon": "local_laundry_service"
+          },
+          {
+            "name": "Clean Washrooms",
+            "icon": "bathtub"
+          },
+          {
+            "name": "24×7 Room Service",
+            "icon": "room_service"
+          },
+          {
+            "name": "Morning Breakfast(extra pay Included)",
+            "icon": "check_circle"
+          }
+        ]
+      },
+      {
+        "category": "Ideal Group Stay",
+        "items": [
+          {
+            "name": "Ideal for 18–20 Members",
+            "icon": "groups"
+          },
+          {
+            "name": "Power Backup",
+            "icon": "battery_charging_full"
+          },
+          {
+            "name": "Air Conditioning",
+            "icon": "ac_unit"
+          }
+        ]
+      },
+      {
+        "category": "New group",
+        "items": []
+      }
+    ],
+    "imageCategories": [
+      {
+        "category": "Exterior & Villa",
+        "images": [
+          "/uploads/img-1795500199561-e443aba3.webp",
+          "/uploads/img-1795500228569-aa362fec.webp"
+        ]
+      }
+    ],
+    "icalUrls": [],
+    "bookedDates": []
   }
 ]

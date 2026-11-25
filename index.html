@@ -3,56 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Volgo Alpine Retreat | Premium Homestay</title>
-  <meta name="description" content="Discover absolute luxury and natural serenity in our custom-designed mountain retreat. Check availability and book directly.">
+  <title>VolGO Stays | Homestays in Pondicherry</title>
+  <meta name="description" content="Homestays and a 3-bedroom villa in Pondicherry, close to the beach. See every stay on the map, check availability and book directly with VolGO Stays.">
+  <meta name="theme-color" content="#fff3ea">
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Montserrat:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   
   <!-- Icons -->
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
   
   <!-- Favicon -->
   <link rel="icon" type="image/webp" href="assets/logo/volg-logo-simplified.webp">
   
-  <!-- Preload Background Images for Instant Load -->
-  <link rel="preload" href="assets/bg-optimized/bg-1.webp" as="image" type="image/webp">
-  <link rel="preload" href="assets/bg-optimized/bg-2.webp" as="image" type="image/webp">
-  <link rel="preload" href="assets/bg-optimized/bg-3.webp" as="image" type="image/webp">
-  <link rel="preload" href="assets/bg-optimized/bg-4.webp" as="image" type="image/webp">
-  <link rel="preload" href="assets/bg-optimized/bg-5.webp" as="image" type="image/webp">
 
   <!-- Stylesheets -->
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Preconnect to MapTiler CDN and Tile Server for Instant Loading -->
+  <link rel="preconnect" href="https://api.maptiler.com">
+  <link rel="dns-prefetch" href="https://api.maptiler.com">
+  <link rel="preconnect" href="https://cdn.maptiler.com" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn.maptiler.com">
+
+  <!-- MapTiler SDK for Interactive Maps -->
+  <link href="https://cdn.maptiler.com/maptiler-sdk-js/v4.2.1/maptiler-sdk.css" rel="stylesheet" />
+  <script src="https://cdn.maptiler.com/maptiler-sdk-js/v4.2.1/maptiler-sdk.umd.min.js"></script>
 </head>
-<body>
+<body class="icons-loading">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-account_circle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+  <symbol id="i-directions_walk" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
+  <symbol id="i-waves" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0M2 12c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0M2 17c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0"/></symbol>
+</svg>
 
   <!-- Full Canvas Background -->
   <div id="app-background" class="page-bg-image"></div>
 
   <!-- Liquid Glass Header (Full Width) -->
   <header class="site-header">
-    <div class="header-left">
-      <img src="assets/logo/volg-logo-main.webp" alt="VOLGO" class="logo">
+    <a class="brand" href="/" aria-label="VolGO Stays home">
+      <img src="assets/logo/volg-logo-main.webp" alt="VolGO" class="logo">
+      <span class="brand-product">Stays</span>
+    </a>
+    <div class="header-actions">
+      <a class="header-contact" id="headerContact" href="tel:+918608724109">
+        <span class="material-symbols-outlined" aria-hidden="true">call</span>
+        <span id="headerContactText">+91 86087 24109</span>
+      </a>
     </div>
   </header>
 
   <!-- Main Viewport Layout -->
   <main class="viewport-layout">
     
-    <!-- Left Pane: Hero Branding -->
-    <section class="hero-pane">
-      
+    <!-- Left Pane: Pondicherry map with our 3 stays -->
+    <section class="left hero-pane">
+      <h1>Stays in <span class="accent">Pondicherry</span></h1>
+      <p class="sub">Tap a pin to see photos. Dotted lines show the walk to the beach.</p>
 
-      <div class="hero-content-wrapper">
-        <div class="hero-content">
-          <h1 class="hero-title" id="heroTitle">Volgo Alpine Retreat</h1>
-          <p class="hero-tagline" id="heroTagline">A premium sanctuary nestled in pristine nature.</p>
+      <div class="stays-map-frame" id="staysMapFrame">
+        <div id="staysMap" class="stays-map" role="region" aria-label="Interactive Map of Pondicherry"></div>
+        
+        <!-- Active Guideline Pill Banner on Map -->
+        <div class="map-guideline-bar" id="mapGuidelineBar" style="display:none;">
+          <div class="mgb-content">
+            <span class="mgb-icon">📍</span>
+            <span class="mgb-text" id="mapGuidelineText">Guideline: Rock Beach (1.0 km)</span>
+          </div>
+          <button type="button" class="mgb-btn" id="btnOpenGlassModal" style="display:none;">Explore Areas</button>
         </div>
 
-        <!-- Booking form moved to right pane -->
+        <div class="map-perspective-controls">
+          <button type="button" class="ctrl-btn" id="btn3dToggle" title="Toggle 3D Perspective Tilt">
+            <svg class="ctrl-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+            <span id="btn3dText">3D View</span>
+          </button>
+          <button type="button" class="ctrl-btn ctrl-btn-icon" id="btnZoomIn" title="Zoom In" aria-label="Zoom In">
+            <svg class="ctrl-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          <button type="button" class="ctrl-btn ctrl-btn-icon" id="btnZoomOut" title="Zoom Out" aria-label="Zoom Out">
+            <svg class="ctrl-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          <button type="button" class="ctrl-btn" id="btnResetView" title="Full View - Show All 3 Stays">
+            <svg class="ctrl-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+            <span id="btnResetViewText">Full View</span>
+          </button>
+        </div>
+
+        <!-- Fullscreen Bottom Dock -->
+        <div class="map-fullscreen-dock" id="mapFsDock" style="display:none;">
+          <button type="button" class="mf-dock-card active" data-stay="volgo-homestay-first">
+            <img src="assets/images/volgo_1.webp" alt="Volgo Alpine Retreat">
+            <div class="mf-dock-info">
+              <b>Volgo Alpine Retreat</b>
+              <span>Heritage Town · ₹2,700</span>
+            </div>
+          </button>
+          <button type="button" class="mf-dock-card" data-stay="volgo-villa-eden-beach">
+            <img src="assets/images/volgo_5.webp" alt="Pondicherry Villa Homestay">
+            <div class="mf-dock-info">
+              <b>Pondicherry Villa Homestay</b>
+              <span>Ariyankuppam · from ₹2,700</span>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Outside Map: Legend & Stay Selection Cards -->
+      <ul class="legend">
+        <li><i class="dot navy"></i>Our Stays</li>
+        <li><i class="dot red"></i>Beach Destination</li>
+        <li><i class="dash"></i>Walking route</li>
+      </ul>
+
+      <div class="stay-cards" id="stayCards">
+        <button class="stay-card selected" data-pin="heritage" data-id="volgo-homestay-first" type="button">
+          <img src="assets/images/volgo_1.webp" alt="Volgo Alpine Retreat" class="thumb">
+          <div>
+            <b>Volgo Alpine Retreat</b>
+            <span>₹2,700</span>
+          </div>
+        </button>
+        <button class="stay-card" data-pin="eden" data-id="volgo-villa-eden-beach" type="button">
+          <img src="assets/images/volgo_5.webp" alt="Eden Villa 3BHK" class="thumb">
+          <div>
+            <b>VolGO 3BHK Villa – Eden</b>
+            <span>from ₹2,700</span>
+          </div>
+        </button>
       </div>
     </section>
 
@@ -61,23 +155,22 @@
       <div class="glass-card border-glow-card" id="overviewCard">
         <span class="edge-light"></span>
         <div class="border-glow-inner">
-          
           <!-- Tab Navigation -->
         <nav class="card-nav">
           <button class="nav-tab active" data-tab="calendar">
-            <span class="material-symbols-outlined">calendar_month</span>
+            <span class="material-symbols-outlined tab-icon">calendar_month</span>
             <span>Booking</span>
           </button>
           <button class="nav-tab" data-tab="overview">
-            <span class="material-symbols-outlined">info</span>
+            <svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6h.01"/></svg>
             <span>Overview</span>
           </button>
           <button class="nav-tab" data-tab="gallery">
-            <span class="material-symbols-outlined">photo_library</span>
+            <svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.6"/><path d="M21 16l-5-5-8.5 9"/></svg>
             <span>Gallery</span>
           </button>
           <button class="nav-tab" data-tab="contact">
-            <span class="material-symbols-outlined">alternate_email</span>
+            <svg class="tab-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5 12 13l8.5-6.5"/></svg>
             <span>Contact</span>
           </button>
         </nav>
@@ -88,7 +181,7 @@
           <!-- TAB: Overview -->
           <div class="tab-pane" id="tab-overview">
             <div class="pane-header">
-              <h2 class="pane-title">Volgo HomeStay</h2>
+              <h2 class="pane-title" id="overviewTitle">Volgo HomeStay</h2>
               <div class="residence-specs">
                 <div class="spec-item">
                   <span class="material-symbols-outlined">group</span>
@@ -104,16 +197,45 @@
                   <span class="material-symbols-outlined">bathtub</span>
                   <span id="specBathrooms">3.5 Baths</span>
                 </div>
+                <div class="spec-divider"></div>
+                <div class="spec-item">
+                  <span class="material-symbols-outlined">square_foot</span>
+                  <span id="specArea">1,200 sq ft</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Area Selector in Overview Tab -->
+            <div class="overview-area-bar" id="overviewAreaBar">
+              <span class="overview-area-label">Explore Area:</span>
+              <div class="overview-area-options" id="overviewAreaOptions">
+                <!-- Dynamically rendered -->
               </div>
             </div>
             
-            <p class="description-text" id="propertyDesc">
-              Welcome to VolGO Homestay, your home in Pondicherry.Enjoy a peaceful stay near Rock Beach and Sri Aurobindo Ashram.Relax in a cozy space with warm and friendly hospitality.We're here to make every moment of your stay memorable.
-            </p>
+            <div class="description-text" id="propertyDesc"></div>
+
+            <div class="villa-layout" id="villaLayout" hidden>
+              <h3 class="section-subtitle">Rooms & layout</h3>
+              <div class="villa-rooms" id="villaRooms"></div>
+              <ul class="villa-layout-list" id="villaLayoutList"></ul>
+              <div class="villa-guest-note" id="villaGuestNote" hidden>
+                <h4>Booking a single room?</h4>
+                <ul id="villaGuestNoteList"></ul>
+              </div>
+            </div>
             
             <h3 class="section-subtitle">Amenities</h3>
             <div class="amenities-grid" id="amenitiesGrid">
               <!-- Dynamically populated -->
+            </div>
+
+            <!-- Quick Book CTA from Overview -->
+            <div class="overview-book-cta-box" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-peach-border, #fed7aa);">
+              <button type="button" class="btn-primary btn-book btn-book-stay" id="btnBookFromOverview" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600; padding: 14px 20px; border-radius: 12px; background: #0f172a; color: #fff; cursor: pointer; border: none; box-shadow: 0 4px 14px rgba(15,23,42,0.18);">
+                <span class="material-symbols-outlined" style="font-size: 20px;">calendar_month</span>
+                <span>Book This Stay →</span>
+              </button>
             </div>
           </div>
           
@@ -128,6 +250,14 @@
                 <!-- Dynamically populated -->
               </div>
             </div>
+
+            <!-- Quick Book CTA from Gallery -->
+            <div class="gallery-book-cta-box" style="margin-top: 24px; text-align: center;">
+              <button type="button" class="btn-primary btn-book btn-book-stay" id="btnBookFromGallery" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600; padding: 14px 20px; border-radius: 12px; background: #0f172a; color: #fff; cursor: pointer; border: none; box-shadow: 0 4px 14px rgba(15,23,42,0.18);">
+                <span class="material-symbols-outlined" style="font-size: 20px;">calendar_month</span>
+                <span>Book This Stay →</span>
+              </button>
+            </div>
           </div>
           
           <!-- TAB: Calendar -->
@@ -135,38 +265,58 @@
             <div class="booking-form-inline" style="position: relative;">
               <h2 class="booking-form-title" style="margin-bottom: 24px; font-size: 28px; font-family: var(--font-serif); font-weight: 500;">Complete Your Booking</h2>
               
-              <!-- Calendar Modal Popup -->
-              <div id="calendarModalOverlay" class="calendar-modal-overlay">
-                <div class="electric-border calendar-modal-box" id="bookingElectricBorder" style="--electric-border-color: #ffc800;">
-                  <div class="eb-canvas-container">
-                    <canvas class="eb-canvas" id="bookingCanvas"></canvas>
-                  </div>
-                  <div class="eb-layers">
-                    <div class="eb-glow-1"></div>
-                    <div class="eb-glow-2"></div>
-                    <div class="eb-background-glow"></div>
-                  </div>
-                  <div class="eb-content">
-                    <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                      <h3 style="margin:0; font-size:20px; font-weight:500;">Select Dates</h3>
-                      <button id="closeCalendarBtn" class="modal-close-btn"><span class="material-symbols-outlined">close</span></button>
-                    </div>
-                    
-
-                    
-                    <div id="bookingCalendar" class="calendar-container">
-                      <!-- Calendar rendered here -->
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+              <!-- Calendar Modal Trigger Info -->
               
               <div class="booking-action-bar" style="background: transparent; border: none; padding: 0;">
                 <div class="booking-contact-inputs">
-                  <div class="input-group" style="grid-column: 1 / -1;">
-                    <label for="bookingLocation">Location</label>
-                    <input type="text" id="bookingLocation" value="Pondicherry" readonly style="cursor: default;" />
+                  <div class="input-group location-input-group full-width" style="grid-column: 1 / -1;">
+                    <label for="pondicherryToggleBtn">Location</label>
+                    <div class="pondicherry-location-card" id="pondicherryLocationCard">
+                      <!-- Main Clickable Pondicherry Header -->
+                      <div class="pondicherry-header-btn" id="pondicherryToggleBtn" tabindex="0" role="button" aria-expanded="false" aria-controls="pondicherryStaysPanel">
+                        <div class="p-header-left">
+                          <span class="material-symbols-outlined p-pin-icon">location_on</span>
+                          <div class="p-header-text">
+                            <div class="p-city-line" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                              <span class="p-city-name" id="selectedStayHeaderName" style="font-weight: 600; font-size: 14.5px; color: #0f172a;">Volgo Alpine Retreat</span>
+                              <span class="p-count-pill" id="selectedStayHeaderArea" style="font-size: 11.5px; color: #64748b; background: transparent; padding: 0; border: none;">Heritage Town, Pondicherry</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="p-header-right">
+                          <span class="p-click-hint" style="font-size: 11.5px; color: var(--color-accent); font-weight: 600;">Change Stay</span>
+                          <span class="material-symbols-outlined p-chevron" id="pondicherryChevron">expand_more</span>
+                        </div>
+                      </div>
+
+                      <!-- Stays in Pondicherry that appear below on click -->
+                      <div class="pondicherry-stays-panel" id="pondicherryStaysPanel">
+                        <div class="stays-panel-header">
+                          <span class="material-symbols-outlined">hotel</span>
+                          <span>Stays in Pondicherry:</span>
+                        </div>
+                        <div class="pondicherry-stays-list" id="pondicherryStaysList">
+                          <!-- Populated dynamically via JS with label below -->
+                        </div>
+                      </div>
+                    </div>
+                    <input type="hidden" id="bookingLocation" value="Heritage Town, Pondicherry" />
+                  </div>
+
+                  <div class="unit-picker full-width" id="unitPicker" hidden style="grid-column: 1 / -1;">
+                    <label>What would you like to book?</label>
+                    <div class="unit-options" id="unitOptions" role="group" aria-label="Whole villa or single rooms"></div>
+                    <p class="unit-rule" id="unitRule"></p>
+                  </div>
+
+                  <div class="booking-rates-banner full-width" id="bookingRatesBanner" style="grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; background: #fff4ec; border: 1px solid #fed7c3; border-radius: 8px; padding: 10px 14px; font-size: 13px;">
+                    <span style="color: #9a3412; display: flex; align-items: center; gap: 6px;">
+                      <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-accent);">payments</span>
+                      <span>Rates per night:</span>
+                    </span>
+                    <span id="bookingRatesDisplay" style="font-weight: 500; color: #0f172a;">
+                      <span style="color: var(--color-accent); font-weight: 600;">₹2,700</span> <span style="font-size: 11px; opacity: 0.8;">weekday</span> &bull; <span style="color: var(--color-accent); font-weight: 600;">₹3,700</span> <span style="font-size: 11px; opacity: 0.8;">weekend</span>
+                    </span>
                   </div>
                   
                   <div class="input-group">
@@ -188,26 +338,44 @@
                     </div>
                   </div>
                   
-                  <div class="input-group" style="padding-top: 4px;">
-                    <label>Guests</label>
-                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:2px;">
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:12px; font-weight:500;">Adults</span>
-                        <div class="guest-controls" style="display:flex; align-items:center; gap:8px;">
-                          <button type="button" class="btn-adult-dec" id="btnAdultDec" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;" disabled>−</button>
-                          <span class="guest-count" id="countAdults" style="width:16px; text-align:center; font-size:13px;">2</span>
-                          <button type="button" class="btn-adult-inc" id="btnAdultInc" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;">+</button>
+                  <div class="input-group full-width" style="grid-column: 1 / -1; margin-top: 4px;">
+                    <label>Guests (Adjustable)</label>
+                    <div class="guest-counter-box">
+                      <div class="guest-counter-item">
+                        <div class="guest-counter-label">
+                          <span class="guest-title">Adults</span>
+                          <span class="guest-subtitle">Age 13+</span>
+                        </div>
+                        <div class="guest-controls">
+                          <button type="button" class="guest-btn btn-adult-dec" id="btnAdultDec" aria-label="Decrease adults" disabled>−</button>
+                          <span class="guest-count" id="countAdults">2</span>
+                          <button type="button" class="guest-btn btn-adult-inc" id="btnAdultInc" aria-label="Increase adults">+</button>
                         </div>
                       </div>
-                      <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:12px; font-weight:500;">Children</span>
-                        <div class="guest-controls" style="display:flex; align-items:center; gap:8px;">
-                          <button type="button" class="btn-child-dec" id="btnChildDec" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;" disabled>−</button>
-                          <span class="guest-count" id="countChildren" style="width:16px; text-align:center; font-size:13px;">0</span>
-                          <button type="button" class="btn-child-inc" id="btnChildInc" style="width:24px; height:24px; border-radius:4px; border:1px solid rgba(255,255,255,0.2); background:transparent; color:#fff; cursor:pointer;">+</button>
+                      <div class="guest-counter-divider"></div>
+                      <div class="guest-counter-item">
+                        <div class="guest-counter-label">
+                          <span class="guest-title">Children</span>
+                          <span class="guest-subtitle">Ages 0–12</span>
+                        </div>
+                        <div class="guest-controls">
+                          <button type="button" class="guest-btn btn-child-dec" id="btnChildDec" aria-label="Decrease children" disabled>−</button>
+                          <span class="guest-count" id="countChildren">0</span>
+                          <button type="button" class="guest-btn btn-child-inc" id="btnChildInc" aria-label="Increase children">+</button>
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  <!-- Morning Breakfast Add-on (Only for Ariyankuppam Stay) -->
+                  <div class="input-group full-width" id="breakfastOptionGroup" style="display: none; grid-column: 1 / -1; margin-top: 4px;">
+                    <label style="display: flex; align-items: center; justify-content: space-between; background: #fff8f3; border: 1px solid #fed7aa; border-radius: 10px; padding: 10px 14px; cursor: pointer; user-select: none;">
+                      <span style="display: flex; align-items: center; gap: 10px; font-weight: 500; color: #1e293b; font-size: 13.5px;">
+                        <input type="checkbox" id="includeBreakfast" style="width: 18px; height: 18px; accent-color: var(--color-accent, #ea580c); cursor: pointer;" />
+                        <span>Add Morning Breakfast</span>
+                      </span>
+                      <span style="color: var(--color-accent, #ea580c); font-weight: 600; font-size: 13px;">₹200 / person</span>
+                    </label>
                   </div>
                   
                   <div class="input-group full-width" style="margin-top: 8px;">
@@ -229,17 +397,19 @@
                 
                 <div class="booking-note-container">
                   <label for="bookingNote" class="booking-note-label">Request Note (Optional)</label>
-                  <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests for the owner?"></textarea>
+                  <textarea id="bookingNote" class="booking-note-input" placeholder="Any special requests? (Optional)"></textarea>
                 </div>
                 
-                <div id="priceSummaryContainer" style="display: none; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="color: var(--color-text-muted); font-size: 14px;" id="priceBreakdownText">0 Nights</span>
-                    <span style="color: var(--color-text-primary); font-size: 15px; font-weight: 500;" id="priceBreakdownAmount">₹0</span>
+                <div id="priceSummaryContainer" style="display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                  <div id="priceBreakdownList" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="color: var(--color-text-muted); font-size: 14px;" id="priceBreakdownText">0 Nights</span>
+                      <span style="color: var(--color-text-primary); font-size: 15px; font-weight: 500;" id="priceBreakdownAmount">₹0</span>
+                    </div>
                   </div>
-                  <div style="border-top: 1px dashed rgba(255,255,255,0.1); margin: 8px 0; padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600; font-size: 16px;">Total</span>
-                    <span style="font-weight: 700; font-size: 20px; color: var(--accent);" id="priceTotalAmount">₹0</span>
+                  <div style="border-top: 1px dashed #cbd5e1; margin: 8px 0; padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: 600; font-size: 16px;">Total Amount</span>
+                    <span style="font-weight: 700; font-size: 20px; color: var(--color-accent);" id="priceTotalAmount">₹0</span>
                   </div>
                 </div>
                 
@@ -265,7 +435,7 @@
                 <span class="material-symbols-outlined contact-icon">phone_in_talk</span>
                 <div class="contact-info">
                   <div class="contact-label">Call Us</div>
-                  <a href="" id="contactPhone" class="contact-value">+91 95005 08790</a>
+                  <a href="tel:+918608724109" id="contactPhone" class="contact-value">+91 86087 24109</a>
                 </div>
               </div>
               
@@ -294,80 +464,92 @@
               </div>
             </div>
             
-            <div class="map-container">
+            <div class="map-container" id="stayMapContainer">
+              <div id="stayMaptilerMap" class="maptiler-map-instance"></div>
               <iframe 
                 id="contactMap" 
                 src="about:blank"
                 width="100%" 
                 height="100%" 
-                style="border:0;" 
+                style="display:none; border:0;" 
                 allowfullscreen="" 
                 loading="lazy" 
                 referrerpolicy="no-referrer-when-downgrade">
               </iframe>
             </div>
 
-            <!-- Host Note & Guidelines Card -->
-            <div style="margin: 24px 0; padding: 20px; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);">
-              <h3 style="color: var(--accent); margin-bottom: 12px; font-size: 17px; font-weight: 600;">We'd Love to Host You</h3>
-              <p style="font-size: 13.5px; line-height: 1.6; color: var(--color-text-secondary); margin-bottom: 16px;">
-                Thank you for considering <strong>VolGO Homestay</strong>. Our peaceful, newly renovated home is located on <strong>Perumal Koil Street</strong>, just a short walk from <strong>White Town, Rock Beach, and Sri Aurobindo Ashram</strong>.
-              </p>
-              <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--color-text-secondary);">
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>🌙</span>
-                  <span>We maintain <strong>quiet hours after 9:00 PM</strong> to respect our neighbors.</span>
-                </div>
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>🏠</span>
-                  <span>The apartment is on the <strong>second floor (stairs only)</strong>.</span>
-                </div>
-                 <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>🪪</span>
-                  <span>Please carry a <strong>valid government-issued ID</strong>.</span>
-                </div>
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>💳</span>
-                  <span><strong>Advance payment</strong> is required to confirm your booking.</span>
-                </div>
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>🚗</span>
-                  <span><strong>Parking is not available on the premises</strong> (street parking is available nearby).</span>
-                </div>
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>🍳</span>
-                  <span><strong>Breakfast</strong> is available on request (subject to availability and additional charges).</span>
-                </div>
-                <div style="display: flex; align-items: flex-start; gap: 8px;">
-                  <span>⏰</span>
-                  <span><strong>Check-in:</strong> 2:00 PM &nbsp;|&nbsp; <strong>Check-out:</strong> 10:00 AM (Late checkout is chargeable subject to availability).</span>
-                </div>
+            <!-- Map Controls & Directions Bar -->
+            <div class="stay-map-action-bar">
+              <div class="stay-map-style-switches">
+                <button type="button" class="map-style-btn active" data-style="streets" id="mapStyleStreets" title="Street Map">Street</button>
+                <button type="button" class="map-style-btn" data-style="hybrid" id="mapStyleSatellite" title="Satellite & Street Hybrid">Satellite</button>
+                <button type="button" class="map-style-btn" data-style="outdoor" id="mapStyleOutdoor" title="Outdoor Coastal">Outdoor</button>
               </div>
-              <p style="font-size: 13px; line-height: 1.6; color: var(--color-text-secondary); margin-top: 16px; font-style: italic; opacity: 0.9;">
-                If these suit your travel plans, we'd be delighted to hear from you. Feel free to contact us with any questions—we'll be happy to help make your stay in Pondicherry comfortable and memorable.
-              </p>
+              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" class="stay-directions-btn" id="stayDirectionsBtn">
+                <span class="material-symbols-outlined" style="font-size: 16px;">directions</span>
+                <span>Get Directions</span>
+              </a>
             </div>
-            
-            <div class="host-section">
+
+            <!-- Host Note & House Rules (filled per stay by app.js) -->
+            <div class="house-rules-card" id="houseRulesCard" hidden>
+              <h3>We'd love to host you</h3>
+              <p id="houseRulesIntro"></p>
+              <ul id="houseRulesList"></ul>
+            </div>
+
+            <div class="host-section" id="hostSection" hidden>
               <div class="host-header">
-                <img src="assets/logo/host.webp" alt="Host Profile" class="host-avatar">
+                <img src="assets/logo/host.webp" alt="" class="host-avatar">
                 <div class="host-title-info">
-                  <h3>Hosted By Rajachandran</h3>
-                  <span class="host-since">Hosting since 2026</span>
+                  <h3 id="hostName">Your host</h3>
                 </div>
               </div>
-              <p class="host-description">
-                Hi, I’m Rajachandran,<br/>
-                I love welcoming guests and making them feel at home during their stay. We live nearby, so we're always available if you need any assistance while respecting your privacy. I look forward to hosting you and helping you enjoy the best of Pondicherry.
-              </p>
+              <p class="host-description" id="hostBio"></p>
             </div>
           </div>
           
         </div>
       </div>
+      </div>
     </section>
   </main>
   
+  <!-- Large Glossy Movable Glass Modal for Stay & Nearby Area Guidelines -->
+  <div id="stayGlassModal" class="stay-glass-modal-overlay" aria-hidden="true">
+    <div class="stay-glass-modal-box" id="stayGlassModalBox">
+      <!-- Drag Handle -->
+      <div class="glass-drag-bar" id="glassModalDragHandle" title="Click and drag to move popup">
+        <div class="drag-grip-dots">
+          <span></span><span></span><span></span>
+        </div>
+        <span class="drag-bar-title">✨ VolGO Stay Proximity &amp; Guide · Drag to move</span>
+      </div>
+      <button type="button" class="glass-modal-close" id="closeStayGlassModal" title="Close and clear">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <div id="stayGlassModalBody" class="glass-modal-body">
+        <!-- Injected dynamically by app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Calendar Modal Popup (Direct Child of Body for True Viewport Centering) -->
+  <div id="calendarModalOverlay" class="calendar-modal-overlay" aria-hidden="true">
+    <div class="calendar-modal-box" id="bookingElectricBorder">
+      <div class="calendar-modal-inner">
+        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:18px; font-weight:700; color:#0f172a;">Select Check-In &amp; Check-Out</h3>
+          <button id="closeCalendarBtn" class="modal-close-btn" aria-label="Close calendar" title="Close"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        
+        <div id="bookingCalendar" class="calendar-container">
+          <!-- Calendar rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Fullscreen Lightbox / Media Viewer -->
   <div class="lightbox" id="lightbox">
     <button class="lightbox-close" id="lightboxClose" aria-label="Close viewer">
@@ -386,9 +568,21 @@
   </div>
 
   <!-- Javascript Modules -->
-  <!-- Javascript Modules -->
   <script type="module" src="calendar.js"></script>
-
   <script type="module" src="app.js"></script>
+
+  <!-- Floating WhatsApp Action (Icon only) -->
+  <a href="https://wa.me/918608724109?text=Hi%20VolGO%20Stays%2C%20I%20would%20like%20to%20enquire%20about%20a%20homestay%20booking." 
+     target="_blank" 
+     rel="noopener" 
+     class="floating-whatsapp-btn" 
+     id="floatingWhatsappBtn" 
+     aria-label="WhatsApp"
+     title="Chat on WhatsApp">
+    <span class="f-wa-pulse"></span>
+    <svg class="f-wa-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.81 13.47 3.81 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.73 7.34C8.57 7.34 8.31 7.4 8.09 7.64C7.87 7.88 7.24 8.47 7.24 9.67C7.24 10.87 8.12 12.03 8.24 12.19C8.36 12.35 9.94 14.79 12.38 15.84C12.96 16.09 13.41 16.24 13.77 16.35C14.36 16.54 14.89 16.51 15.31 16.45C15.78 16.38 16.76 15.86 16.96 15.28C17.17 14.71 17.17 14.22 17.11 14.12C17.05 14.01 16.89 13.95 16.65 13.83C16.41 13.71 15.22 13.13 15 13.05C14.78 12.97 14.62 12.93 14.46 13.17C14.3 13.41 13.84 13.95 13.7 14.11C13.56 14.27 13.42 14.29 13.18 14.17C12.94 14.05 12.16 13.79 11.24 12.97C10.52 12.33 10.04 11.54 9.9 11.3C9.76 11.06 9.89 10.93 10.01 10.81C10.12 10.7 10.26 10.52 10.38 10.38C10.5 10.24 10.54 10.14 10.62 9.98C10.7 9.82 10.66 9.68 10.6 9.56C10.54 9.44 10.08 8.31 9.88 7.84C9.69 7.38 9.5 7.44 9.35 7.44C9.21 7.43 9.05 7.43 8.89 7.43L8.73 7.34Z"/>
+    </svg>
+  </a>
 </body>
 </html>

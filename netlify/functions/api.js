@@ -20,6 +20,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import crypto, { randomUUID } from 'crypto';
+import * as Rules from '../../lib/booking-rules.js';
+
+if (typeof process.loadEnvFile === 'function' && fs.existsSync(path.join(process.cwd(), '.env'))) {
+  try { process.loadEnvFile(path.join(process.cwd(), '.env')); } catch (_) {}
+}
 
 // Netlify Blobs Helpers
 const BLOB_FILES = {
@@ -27,7 +32,10 @@ const BLOB_FILES = {
   PENDING_FILE: 'pending-requests.json',
   HISTORY_FILE: 'booking-history.json',
   EXTERNAL_ICAL_FILE: 'external-icals.json',
-  HOMESTAYS_FILE: 'homestays.json' // static, but we can store it in blob if modified, actually homestays is read-only from repo so we can leave it as fs read. Wait, we'll put it in Blob too for consistency, or fallback to fs.
+  // The live list of stays. The admin panel edits this copy; data/homestays.json
+  // in the repo is only used to seed it (and to add stays that ship in code).
+  HOMESTAYS_FILE: 'homestays.json',
+  SETTINGS_FILE: 'site-settings.json'
 };
 
 const LOCAL_FILES = {
@@ -35,89 +43,162 @@ const LOCAL_FILES = {
   PENDING_FILE: path.join(process.cwd(), 'data', 'pending-requests.json'),
   HISTORY_FILE: path.join(process.cwd(), 'data', 'booking-history.json'),
   EXTERNAL_ICAL_FILE: path.join(process.cwd(), 'data', 'external-icals.json'),
-  HOMESTAYS_FILE: path.join(process.cwd(), 'data', 'homestays.json')
+  HOMESTAYS_FILE: path.join(process.cwd(), 'data', 'homestays.json'),
+  SETTINGS_FILE: path.join(process.cwd(), 'data', 'site-settings.json')
 };
 
-function getBlobStore() {
+const OBJECT_FILES = new Set(['SETTINGS_FILE']); // stored as {...}, not [...]
+
+// In-memory cache for instant 0ms responses on refresh
+const memoryCache = new Map();
+
+function isBlobsConfigured() {
+  const siteID = (process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID || '').trim();
+  const token = (process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN || '').trim();
+  return Boolean((siteID && token) || (process.env.NETLIFY && process.env.NETLIFY_BLOBS_CONTEXT));
+}
+
+function getBlobStore(name = 'data') {
   let siteID = process.env.NETLIFY_BLOBS_SITE_ID || process.env.SITE_ID;
   let token = process.env.NETLIFY_BLOBS_TOKEN || process.env.NETLIFY_AUTH_TOKEN;
   if (siteID) siteID = siteID.trim();
   if (token) token = token.trim();
-  
-  // Diagnostic logs
-  console.log("DB Init Check: siteID length =", siteID ? siteID.length : 0, 
-              "| token length =", token ? token.length : 0);
-  if (siteID) console.log("siteID snippet:", siteID.substring(0, 4) + "..." + siteID.substring(siteID.length - 4));
-  if (token) console.log("token snippet:", token.substring(0, 4) + "..." + token.substring(token.length - 4));
 
   if (siteID && token) {
     return getStore({
-      name: 'data',
+      name,
       siteID,
       token
     });
   }
-  return getStore('data');
+  return getStore(name);
+}
+
+function readLocalJson(fileKey, fallback) {
+  try {
+    if (fs.existsSync(LOCAL_FILES[fileKey])) return JSON.parse(fs.readFileSync(LOCAL_FILES[fileKey], 'utf-8'));
+  } catch (err) {
+    console.error('Local file read failed for', fileKey, err.message);
+  }
+  return fallback;
+}
+
+/**
+ * Brings things that ship in code into the live copy, without ever overwriting
+ * what the admin panel has saved:
+ *   • stays in data/homestays.json that the live copy doesn't have yet are
+ *     added (unless an admin deleted that stay);
+ *   • fields a stay doesn't have at all yet (e.g. nearbyPlaces, houseRules
+ *     added in a new version) are filled in from the repo file.
+ * Returns the updated list, or null if nothing changed.
+ */
+function syncFromRepo(liveStays, deletedIds) {
+  const repoStays = readLocalJson('HOMESTAYS_FILE', []);
+  const deleted = new Set(deletedIds || []);
+  let changed = false;
+  const result = liveStays.map(live => {
+    const repo = repoStays.find(r => r.id === live.id);
+    if (!repo) return live;
+    const missing = Object.keys(repo).filter(k => !(k in live));
+    if (!missing.length) return live;
+    changed = true;
+    const filled = { ...live };
+    missing.forEach(k => { filled[k] = repo[k]; });
+    return filled;
+  });
+  const known = new Set(liveStays.map(h => h.id));
+  repoStays.forEach(h => {
+    if (h && h.id && !known.has(h.id) && !deleted.has(h.id)) { result.push(h); changed = true; }
+  });
+  return changed ? result : null;
 }
 
 async function getBlob(fileKey) {
+  if (memoryCache.has(fileKey)) {
+    return memoryCache.get(fileKey);
+  }
+
+  // Fast path: if Netlify Blobs is not configured (e.g. local dev, custom server),
+  // read local JSON directly without hanging or logging unconfigured errors.
+  if (!isBlobsConfigured()) {
+    let data = readLocalJson(fileKey, OBJECT_FILES.has(fileKey) ? {} : []);
+    if (fileKey === 'HOMESTAYS_FILE') {
+      const settings = readLocalJson('SETTINGS_FILE', {});
+      const withNew = syncFromRepo(data, settings.deletedStayIds);
+      if (withNew) data = withNew;
+    }
+    if (fileKey === 'SETTINGS_FILE') {
+      data = { ...readLocalJson('SETTINGS_FILE', {}), ...(data || {}) };
+    }
+    memoryCache.set(fileKey, data);
+    return data;
+  }
+
   try {
     const store = getBlobStore();
     let data = await store.get(BLOB_FILES[fileKey], { type: 'json' });
-    
-    // Auto-migrate if local configuration file differs from the Blob store configuration
-    if (fileKey === 'HOMESTAYS_FILE' && data) {
-      const localData = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
-      const hasOldId = data.some(h => h.id === 'volgo-alpine-retreat');
-      
-      // Compare structural changes (ignoring spacing differences by comparing parsed objects)
-      const dataStr = JSON.stringify(data);
-      const localStr = JSON.stringify(localData);
-      
-      if (hasOldId || dataStr !== localStr) {
-        console.log("Migrating Netlify Blobs: syncing with updated data/homestays.json configurations (preserving pricing & promos)");
-        const mergedData = localData.map(localHome => {
-          const existingHome = data.find(h => h.id === localHome.id) || {};
-          return {
-            ...localHome,
-            pricing: existingHome.pricing || localHome.pricing,
-            promos: existingHome.promos !== undefined ? existingHome.promos : localHome.promos
-          };
-        });
-        data = mergedData;
+
+    if (fileKey === 'HOMESTAYS_FILE') {
+      if (!data) {
+        // First run: seed the live copy from the repo file.
+        data = readLocalJson('HOMESTAYS_FILE', []);
         await store.setJSON(BLOB_FILES[fileKey], data);
+      } else {
+        const settings = (await store.get(BLOB_FILES.SETTINGS_FILE, { type: 'json' })) || {};
+        const withNew = syncFromRepo(data, settings.deletedStayIds);
+        if (withNew) {
+          console.log('Adding new stays / new fields from data/homestays.json to the live copy');
+          data = withNew;
+          await store.setJSON(BLOB_FILES[fileKey], data);
+        }
       }
     }
 
-    if (!data && fileKey === 'HOMESTAYS_FILE') {
-       data = JSON.parse(fs.readFileSync(LOCAL_FILES.HOMESTAYS_FILE, 'utf-8'));
-       await store.setJSON(BLOB_FILES[fileKey], data);
+    if (fileKey === 'SETTINGS_FILE') {
+      data = { ...readLocalJson('SETTINGS_FILE', {}), ...(data || {}) };
+    } else {
+      data = data || [];
     }
-    return data || [];
+    memoryCache.set(fileKey, data);
+    return data;
   } catch(e) { 
     console.error("Blob Fetch Error for", fileKey, e.message); 
-    try {
-      if (fs.existsSync(LOCAL_FILES[fileKey])) {
-        return JSON.parse(fs.readFileSync(LOCAL_FILES[fileKey], 'utf-8'));
-      }
-    } catch (err) {
-      console.error("Local file fallback read failed:", err.message);
-    }
-    return []; 
+    const fallback = readLocalJson(fileKey, OBJECT_FILES.has(fileKey) ? {} : []);
+    memoryCache.set(fileKey, fallback);
+    return fallback;
   }
 }
+
 async function setBlob(fileKey, data) {
+  // Always update in-memory cache immediately for 0ms reads
+  memoryCache.set(fileKey, data);
+
+  // Always update local files so development server and builds stay synchronized
   try {
-    const store = getBlobStore();
-    await store.setJSON(BLOB_FILES[fileKey], data);
-  } catch(e) {
-    console.error("Blob Write Error for", fileKey, e.message);
-    try {
+    if (LOCAL_FILES[fileKey]) {
       const dir = path.dirname(LOCAL_FILES[fileKey]);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(LOCAL_FILES[fileKey], JSON.stringify(data, null, 2));
-    } catch (err) {
-      console.error("Local file fallback write failed:", err.message);
+
+      if (fileKey === 'HOMESTAYS_FILE') {
+        const publicPath = path.join(process.cwd(), 'public', 'data', 'homestays.json');
+        const distPath = path.join(process.cwd(), 'dist', 'data', 'homestays.json');
+        try {
+          if (fs.existsSync(path.dirname(publicPath))) fs.writeFileSync(publicPath, JSON.stringify(data, null, 2));
+          if (fs.existsSync(path.dirname(distPath))) fs.writeFileSync(distPath, JSON.stringify(data, null, 2));
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    console.error("Local file sync failed:", err.message);
+  }
+
+  if (isBlobsConfigured()) {
+    try {
+      const store = getBlobStore();
+      await store.setJSON(BLOB_FILES[fileKey], data);
+    } catch(e) {
+      console.error("Blob Write Error for", fileKey, e.message);
     }
   }
 }
@@ -134,7 +215,10 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.set('trust proxy', 1); // Enable for Netlify API Gateway
 app.use(cookieParser());
-app.use(express.json({ limit: '10kb' }));
+// Admin edits (a whole stay with its gallery) need more room than public forms.
+const smallJson = express.json({ limit: '10kb' });
+const adminJson = express.json({ limit: '300kb' });
+app.use((req, res, next) => (req.path.startsWith('/api/admin/') ? adminJson : smallJson)(req, res, next));
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -200,8 +284,14 @@ const bookingRequestSchema = z.object({
   checkOutMs: z.number().int().positive(),
   checkInDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  totalAmount: z.number().nonnegative()
+  totalAmount: z.number().nonnegative(),
+  breakfast: z.boolean().optional().nullable(),
+  // 'whole' (default) or the ids of the rooms being booked
+  units: z.union([z.literal('whole'), z.array(z.string().max(40)).max(10)]).optional().nullable()
 });
+
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const priceSchema = z.object({ weekday: z.number().nonnegative(), weekend: z.number().nonnegative().optional().nullable() });
 
 const pricingSchema = z.object({
   weekday: z.number().nonnegative(),
@@ -209,16 +299,126 @@ const pricingSchema = z.object({
   promos: z.array(z.object({
     code: z.string().min(1),
     discount: z.number().min(1).max(100),
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-  })).optional().nullable()
+    from: dateStr,
+    to: dateStr
+  })).optional().nullable(),
+  // Room-by-room stays (the villa)
+  roomPrices: z.record(z.string(), priceSchema).optional().nullable(),
+  allowRoomsOnWeekends: z.boolean().optional().nullable(),
+  // Price periods, e.g. "Year-end" 10 Dec – 6 Jan. `to` is the last night.
+  seasons: z.array(z.object({
+    id: z.string().max(40).optional(),
+    name: z.string().min(1).max(40),
+    from: dateStr,
+    to: dateStr,
+    pricing: priceSchema,
+    roomPrices: z.record(z.string(), priceSchema).optional().nullable()
+  })).max(20).optional().nullable()
 });
 
 const blockedPeriodSchema = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  note: z.string().max(200).optional().nullable()
+  from: dateStr,
+  to: dateStr,
+  note: z.string().max(200).optional().nullable(),
+  units: z.union([z.literal('whole'), z.array(z.string().max(40)).max(10)]).optional().nullable()
 });
+
+// Everything about a stay that the admin panel can edit (prices have their own endpoint).
+const imagePath = z.string().max(300).regex(/^(\/api\/images\/[\w.-]+|\/?assets\/[\w./-]+|\/uploads\/[\w.-]+|https:\/\/[^\s"'<>()]+)$/, 'Invalid image address');
+const shortText = (max) => z.string().max(max).optional().default('');
+const textList = z.array(z.string().max(300)).max(30).optional().default([]);
+const staySchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  published: z.boolean().optional().default(true),
+  tagline: shortText(160),
+  city: shortText(60),
+  areaName: shortText(60),
+  area: shortText(40),
+  description: shortText(4000),
+  capacity: z.number().int().min(1).max(40),
+  bedrooms: z.number().int().min(0).max(20),
+  bathrooms: z.number().min(0).max(20),
+  location: shortText(200),
+  coordinates: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }),
+  phone: shortText(30),
+  whatsapp: shortText(30),
+  email: shortText(100),
+  thumbnail: z.union([imagePath, z.literal('')]).optional().default(''),
+  imageCategories: z.array(z.object({
+    category: z.string().trim().min(1).max(60),
+    images: z.array(imagePath).max(40)
+  })).max(20).optional().default([]),
+  amenityCategories: z.array(z.object({
+    category: z.string().trim().min(1).max(60),
+    items: z.array(z.object({ name: z.string().trim().min(1).max(60), icon: z.string().regex(/^[a-z0-9_]{1,40}$/) })).max(40)
+  })).max(20).optional().default([]),
+  nearbyPlaces: z.array(z.object({
+    name: z.string().trim().min(1).max(80),
+    type: z.enum(['beach', 'landmark', 'food', 'other']).default('beach'),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    walkMinutes: z.number().int().min(1).max(240).optional().nullable()
+  })).max(12).optional().default([]),
+  layoutDetails: textList,
+  guestInstructions: textList,
+  houseRules: textList,
+  hostName: shortText(60),
+  hostBio: shortText(1000),
+  bookingMode: z.enum(['whole', 'rooms']).optional().default('whole'),
+  wholeLabel: shortText(40),
+  rooms: z.array(z.object({
+    id: z.string().regex(/^[a-z0-9-]{1,40}$/),
+    name: z.string().trim().min(1).max(80),
+    description: shortText(400),
+    capacity: z.number().int().min(1).max(20)
+  })).max(10).optional().default([])
+});
+
+const settingsSchema = z.object({
+  contact: z.object({ phone: shortText(30), whatsapp: shortText(30), email: shortText(100) }).optional(),
+  festiveThemes: z.array(z.object({
+    id: z.string().max(40).optional(),
+    theme: z.enum(Rules.FESTIVE_THEMES),
+    from: dateStr,
+    to: dateStr,
+    enabled: z.boolean().optional().default(true)
+  })).max(30).optional()
+});
+
+function zodMessage(parsed) {
+  return parsed.error.issues.map(i => `${i.path.join('.') || 'input'}: ${i.message}`).slice(0, 5).join('; ');
+}
+
+function slugify(name) {
+  return String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'stay';
+}
+
+function isAdminRequest(req) {
+  try { return Boolean(req.cookies?.volgo_session && jwt.verify(req.cookies.volgo_session, JWT_SECRET)); }
+  catch (_) { return false; }
+}
+
+/** Booked periods for a stay: confirmed blocks plus live pending holds. */
+async function getAllPeriods(propertyId) {
+  const data = await getBlob('BOOKINGS_FILE');
+  const record = data.find(b => b.propertyId === propertyId);
+  const periods = record ? [...record.blockedPeriods] : [];
+  const pending = await getBlob('PENDING_FILE');
+  pending
+    .filter(p => p.homestayId === propertyId && (!p.expiresAt || p.expiresAt > Date.now()))
+    .forEach(hold => {
+      const from = hold.checkInDate || hold.checkIn;
+      const to = hold.checkOutDate || hold.checkOut;
+      if (Rules.isDateStr(from) && Rules.isDateStr(to)) {
+        periods.push({ from, to, units: hold.units || 'whole', note: 'Pending (Auto-Hold)', pending: true, requestId: hold.id });
+      }
+    });
+  return periods;
+}
+
+function todayInIndia() {
+  return new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10);
+}
 
 // Audit Logging Helper
 async function logAdminAction(username, ip, action, details) {
@@ -280,11 +480,30 @@ function sanitizeHtml(str) {
 
 // GET /api/homestays
 app.get('/api/homestays', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Expires', '-1');
+  res.setHeader('Pragma', 'no-cache');
   try {
     const data = await getBlob('HOMESTAYS_FILE');
-    res.json(data);
+    // Stays switched off in the admin panel (e.g. still waiting for photos) are hidden.
+    res.json(data.filter(h => h.published !== false));
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve homestays data.' });
+  }
+});
+
+// GET /api/site-settings – public contact details and today's festive theme.
+// The theme is picked here on the server from the admin's schedule.
+app.get('/api/site-settings', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  try {
+    const settings = await getBlob('SETTINGS_FILE');
+    res.json({
+      contact: settings.contact || {},
+      festiveTheme: Rules.activeFestiveTheme(settings.festiveThemes, todayInIndia())
+    });
+  } catch (err) {
+    res.json({ contact: {}, festiveTheme: null });
   }
 });
 
@@ -296,18 +515,39 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
     }
     const payload = parsed.data;
 
-    // Check Availability
-    const fromStr = payload.checkIn;
-    const toStr = payload.checkOut;
-    
-    if (true) {
-      const data = (await getBlob('BOOKINGS_FILE'));
-      const record = data.find(b => b.propertyId === payload.homestayId);
-      if (record) {
-        const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
-        if (overlap) return res.status(409).json({error: 'Sorry, these dates have just been booked. Please choose different dates.'});
-      }
+    const stays = await getBlob('HOMESTAYS_FILE');
+    const stay = stays.find(h => h.id === payload.homestayId && h.published !== false);
+    if (!stay) return res.status(404).json({ error: 'This stay is not available for booking.' });
+
+    // Check availability with the same rules the website uses (whole villa vs
+    // rooms, Friday/Saturday rule). Dates are the YYYY-MM-DD fields; checkIn /
+    // checkOut are display text for emails.
+    const selection = Rules.normalizeSelection(stay, Rules.unitsToSelection(payload.units));
+    const periods = await getAllPeriods(stay.id);
+    const problem = Rules.validateBooking(stay, periods, selection, payload.checkInDate, payload.checkOutDate);
+    if (problem) return res.status(409).json({ error: problem });
+
+    const guests = payload.adults + payload.children;
+    if (guests > Rules.capacityFor(stay, selection)) {
+      return res.status(400).json({ error: 'Too many guests for the rooms selected.' });
     }
+
+    // The server works out the price; the browser's figure is not trusted.
+    const priced = Rules.quote(stay, selection, payload.checkInDate, payload.checkOutDate, payload.promoCode);
+    let calculatedTotal = priced.total;
+    if (payload.breakfast) {
+      const nights = Rules.eachNight(payload.checkInDate, payload.checkOutDate).length;
+      calculatedTotal += (payload.adults + payload.children) * 200 * nights;
+    }
+    payload.totalAmount = calculatedTotal;
+    payload.units = Rules.selectionToUnits(selection);
+    payload.unitsLabel = Rules.selectionLabel(stay, selection);
+    payload.homestayName = stay.name;
+    // Work out times from the dates (2 PM check-in, 10 AM check-out, India time)
+    // instead of trusting the browser's clock.
+    payload.checkInMs = Date.parse(payload.checkInDate + 'T14:00:00+05:30');
+    payload.checkOutMs = Date.parse(payload.checkOutDate + 'T10:00:00+05:30');
+    if (payload.checkOutMs <= Date.now()) return res.status(400).json({ error: 'Please choose dates in the future.' });
 
     const pending = (await getBlob('PENDING_FILE'));
     
@@ -340,6 +580,7 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
         subject: "\uD83C\uDF89 New Booking Request - " + sanitizeHtml(payload.homestayName),
         html: "<h2>New Booking Request Received!</h2>" +
               "<p><strong>Property:</strong> " + sanitizeHtml(payload.homestayName) + "</p>" +
+              "<p><strong>Booking:</strong> " + sanitizeHtml(payload.unitsLabel) + " &mdash; &#8377;" + Number(payload.totalAmount).toLocaleString('en-IN') + "</p>" +
               "<p><strong>Guest Name:</strong> " + sanitizeHtml(payload.guestName) + "</p>" +
               "<p><strong>Phone / WhatsApp:</strong> " + sanitizeHtml(payload.guestPhone) + "</p>" +
               (payload.promoCode ? "<p><strong>Promo Code:</strong> " + sanitizeHtml(payload.promoCode) + "</p>" : "") +
@@ -450,6 +691,21 @@ app.post('/api/admin/login', applyRateLimit, async (req, res) => {
 
   if (username !== targetUser || password !== targetPass) {
     return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  // OTP turned off as requested (set ENABLE_ADMIN_OTP=true to re-enable)
+  const isOtpEnabled = process.env.ENABLE_ADMIN_OTP === 'true';
+
+  if (!isOtpEnabled) {
+    const token = jwt.sign({ username: targetUser }, JWT_SECRET, { expiresIn: '2h' });
+    const isSecure = req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1');
+    res.cookie('volgo_session', token, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: 'strict',
+      maxAge: 2 * 60 * 60 * 1000 // 2 hours
+    });
+    return res.json({ success: true, mfaRequired: false });
   }
 
   // Generate 6-digit OTP
@@ -618,10 +874,11 @@ app.get('/api/calendar/:propertyId.ics', async (req, res) => {
 //  API: get blocked periods
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/periods/:propertyId', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   const data = (await getBlob('BOOKINGS_FILE'));
-  const record = data.find(b => b.propertyId === req.params.propertyId);
-  
-  if (!record) return res.json([]);
+  const record = data.find(b => b.propertyId === req.params.propertyId) || { blockedPeriods: [] };
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 3); // 3 days ago
@@ -634,30 +891,17 @@ app.get('/api/periods/:propertyId', async (req, res) => {
   });
 
   // If any were removed, save the file
-  if (record.blockedPeriods.length !== originalLength) {
+  if (record.propertyId && record.blockedPeriods.length !== originalLength) {
     await setBlob('BOOKINGS_FILE', data);
     regenerateIcal();
   }
 
-  const combinedPeriods = [...record.blockedPeriods];
-  
-  // Merge active temporary holds
-  if (true) {
-    const pending = (await getBlob('PENDING_FILE'));
-    const activeHolds = pending.filter(p => p.homestayId === req.params.propertyId && (!p.expiresAt || p.expiresAt > Date.now()));
-    
-    activeHolds.forEach(hold => {
-      const fromDateStr = hold.checkIn;
-      const toDateStr = hold.checkOut;
-      
-      combinedPeriods.push({
-        from: fromDateStr,
-        to: toDateStr,
-        note: "Pending (Auto-Hold)"
-      });
-    });
-  }
+  const combinedPeriods = await getAllPeriods(req.params.propertyId);
 
+  // Guests only need the dates. Notes (which hold guest names) are admin-only.
+  if (!isAdminRequest(req)) {
+    return res.json(combinedPeriods.map(p => ({ from: p.from, to: p.to, units: p.units || 'whole' })));
+  }
   res.json(combinedPeriods);
 });
 
@@ -670,8 +914,8 @@ app.post('/api/homestay/:id/pricing', authMiddleware, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid input formatting: ' + parsed.error.issues.map(i => i.message).join(', ') });
   }
-  const { weekday, weekend, promos } = parsed.data;
-  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'UPDATE_PRICING', { propertyId: req.params.id, weekday, weekend, promosCount: promos ? promos.length : 0 });
+  const { weekday, weekend, promos, roomPrices, allowRoomsOnWeekends, seasons } = parsed.data;
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'UPDATE_PRICING', { propertyId: req.params.id, weekday, weekend, promosCount: promos ? promos.length : 0, seasonsCount: seasons ? seasons.length : 0, allowRoomsOnWeekends });
 
   if (true) {
     const data = (await getBlob('HOMESTAYS_FILE'));
@@ -679,6 +923,20 @@ app.post('/api/homestay/:id/pricing', authMiddleware, async (req, res) => {
     if (record) {
       record.pricing = { weekday, weekend };
       record.promos = Array.isArray(promos) ? promos : [];
+      if (roomPrices && Array.isArray(record.rooms)) {
+        record.rooms.forEach(room => {
+          const p = roomPrices[room.id];
+          if (p) room.price = { weekday: p.weekday, weekend: p.weekend || p.weekday };
+        });
+      }
+      if (typeof allowRoomsOnWeekends === 'boolean') {
+        record.roomBooking = { ...(record.roomBooking || {}), allowOnWeekends: allowRoomsOnWeekends };
+      }
+      if (Array.isArray(seasons)) {
+        const bad = seasons.find(se => se.from > se.to);
+        if (bad) return res.status(400).json({ error: `Price period "${bad.name}" ends before it starts.` });
+        record.seasons = seasons.map(se => ({ ...se, id: se.id || 'season-' + randomUUID().slice(0, 8) }));
+      }
       // Clean up old single promo if it exists
       if (record.promo) delete record.promo;
       await setBlob('HOMESTAYS_FILE', data);
@@ -694,6 +952,10 @@ app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Invalid input formatting: ' + parsed.error.issues.map(i => i.message).join(', ') });
   }
   const { from, to, note } = parsed.data;
+  const stays = await getBlob('HOMESTAYS_FILE');
+  const stay = stays.find(h => h.id === req.params.propertyId) || {};
+  const selection = Rules.normalizeSelection(stay, Rules.unitsToSelection(parsed.data.units));
+  const units = Rules.selectionToUnits(selection);
 
   if (from >= to) {
     return res.status(400).json({ error: 'Invalid dates. "from" must be before "to".' });
@@ -704,7 +966,8 @@ app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
     const pending = (await getBlob('PENDING_FILE'));
     const d1 = new Date(from).getTime();
     const d2 = new Date(to).getTime();
-    const overlapPending = pending.some(p => p.homestayId === req.params.propertyId && d1 < p.checkOutMs && d2 > p.checkInMs);
+    const overlapPending = pending.some(p => p.homestayId === req.params.propertyId && d1 < p.checkOutMs && d2 > p.checkInMs &&
+      Rules.periodBlocksSelection({ units: p.units }, selection));
     if (overlapPending && !req.query.force) {
       return res.status(409).json({ error: 'OVERLAP_PENDING', msg: 'These dates overlap with a pending booking request! Confirm to overwrite.' });
     }
@@ -718,16 +981,16 @@ app.post('/api/periods/:propertyId', authMiddleware, async (req, res) => {
     data.push(record);
   }
 
-  const overlap = record.blockedPeriods.some(p => from < p.to && to > p.from);
+  const overlap = record.blockedPeriods.some(p => from < p.to && to > p.from && Rules.periodBlocksSelection(p, selection));
   if (overlap) {
     return res.status(409).json({ error: 'These dates overlap with an existing blocked period.' });
   }
 
-  record.blockedPeriods.push({ from, to, ...(note ? { note } : {}) });
+  record.blockedPeriods.push({ from, to, ...(note ? { note } : {}), ...(units !== 'whole' ? { units } : {}) });
   record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
 
   await setBlob('BOOKINGS_FILE', data);
-  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'ADD_BLOCKED_PERIOD', { propertyId: req.params.propertyId, from, to, note });
+  await logAdminAction(req.adminUser, req.ip || req.socket.remoteAddress, 'ADD_BLOCKED_PERIOD', { propertyId: req.params.propertyId, from, to, note, units });
   regenerateIcal();
   res.json({ success: true, periods: record.blockedPeriods });
 });
@@ -765,6 +1028,9 @@ async function saveToHistory(reqObj, status) {
 }
 
 app.get('/api/pending-requests', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   const _tPENDING_FILE = await getBlob('PENDING_FILE'); if (!_tPENDING_FILE || _tPENDING_FILE.length===0) return res.json([]);
   let pending = (await getBlob('PENDING_FILE'));
   
@@ -808,11 +1074,13 @@ app.post('/api/approve-request/:id', authMiddleware, async (req, res) => {
     data.push(record);
   }
   
-  const fromStr = reqObj.checkIn;
-  const toStr = reqObj.checkOut;
+  // Use the YYYY-MM-DD fields; checkIn/checkOut are display text like "Fri, Dec 4, 2026".
+  const fromStr = reqObj.checkInDate || reqObj.checkIn;
+  const toStr = reqObj.checkOutDate || reqObj.checkOut;
+  const selection = Rules.unitsToSelection(reqObj.units);
   
   // FINAL AVAILABILITY CHECK BEFORE APPROVING
-  const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from);
+  const overlap = record.blockedPeriods.some(p => fromStr < p.to && toStr > p.from && Rules.periodBlocksSelection(p, selection));
   if (overlap) {
     return res.status(409).json({error: 'These dates were booked on another platform (or manually). This request can no longer be approved.'});
   }
@@ -820,8 +1088,10 @@ app.post('/api/approve-request/:id', authMiddleware, async (req, res) => {
   record.blockedPeriods.push({
     from: fromStr,
     to: toStr,
-    note: '[Approved] ' + reqObj.guestName
+    note: '[Approved] ' + reqObj.guestName + (reqObj.unitsLabel && reqObj.units !== 'whole' ? ' — ' + reqObj.unitsLabel : ''),
+    ...(Array.isArray(reqObj.units) ? { units: reqObj.units } : {})
   });
+  record.blockedPeriods.sort((a, b) => a.from.localeCompare(b.from));
   
   await setBlob('BOOKINGS_FILE', data);
   
@@ -1054,6 +1324,142 @@ app.get('/api/admin/history', authMiddleware, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  ADMIN: stays, photos and site settings (everything the website shows)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// All stays, including hidden ones, for the admin editor.
+app.get('/api/admin/homestays', authMiddleware, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await getBlob('HOMESTAYS_FILE'));
+});
+
+// Create a new stay without touching code.
+app.post('/api/admin/homestays', authMiddleware, async (req, res) => {
+  const parsed = staySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed) });
+  const data = await getBlob('HOMESTAYS_FILE');
+  let id = slugify(parsed.data.name);
+  while (data.some(h => h.id === id)) id = slugify(parsed.data.name).slice(0, 33) + '-' + randomUUID().slice(0, 6);
+  const stay = {
+    id,
+    ...parsed.data,
+    pricing: { weekday: 0, weekend: 0 },
+    promos: [],
+    seasons: [],
+    bookedDates: [],
+    rooms: parsed.data.rooms.map(r => ({ ...r, price: { weekday: 0, weekend: 0 } }))
+  };
+  data.push(stay);
+  await setBlob('HOMESTAYS_FILE', data);
+  await logAdminAction(req.adminUser, req.ip, 'CREATE_STAY', { id, name: stay.name });
+  res.json({ success: true, stay });
+});
+
+// Save a stay's details (name, overview, gallery, amenities, map places, rooms…).
+// Prices, promos and price periods are saved by /api/homestay/:id/pricing.
+app.put('/api/admin/homestays/:id', authMiddleware, async (req, res) => {
+  const parsed = staySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed) });
+  const data = await getBlob('HOMESTAYS_FILE');
+  const stay = data.find(h => h.id === req.params.id);
+  if (!stay) return res.status(404).json({ error: 'Stay not found.' });
+
+  const oldRooms = Array.isArray(stay.rooms) ? stay.rooms : [];
+  Object.assign(stay, parsed.data);
+  // Keep each room's prices when its details are edited.
+  stay.rooms = parsed.data.rooms.map(r => ({ ...r, price: oldRooms.find(o => o.id === r.id)?.price || { weekday: 0, weekend: 0 } }));
+  if (stay.mapEmbedUrl) delete stay.mapEmbedUrl; // built from coordinates now
+
+  await setBlob('HOMESTAYS_FILE', data);
+  await logAdminAction(req.adminUser, req.ip, 'UPDATE_STAY', { id: stay.id, name: stay.name, published: stay.published });
+  res.json({ success: true, stay });
+});
+
+app.delete('/api/admin/homestays/:id', authMiddleware, async (req, res) => {
+  const data = await getBlob('HOMESTAYS_FILE');
+  const stay = data.find(h => h.id === req.params.id);
+  if (!stay) return res.status(404).json({ error: 'Stay not found.' });
+  if (data.length <= 1) return res.status(400).json({ error: 'The website needs at least one stay.' });
+
+  const bookings = await getBlob('BOOKINGS_FILE');
+  const record = bookings.find(b => b.propertyId === stay.id);
+  const upcoming = (record?.blockedPeriods || []).some(p => p.to >= todayInIndia() && !p.external);
+  if (upcoming && !req.query.force) {
+    return res.status(409).json({ error: 'This stay has upcoming bookings. Hide it instead, or confirm to delete anyway.' });
+  }
+
+  await setBlob('HOMESTAYS_FILE', data.filter(h => h.id !== stay.id));
+  // Remember the deletion so the repo's data/homestays.json doesn't bring it back.
+  const settings = await getBlob('SETTINGS_FILE');
+  settings.deletedStayIds = [...new Set([...(settings.deletedStayIds || []), stay.id])];
+  await setBlob('SETTINGS_FILE', settings);
+  await logAdminAction(req.adminUser, req.ip, 'DELETE_STAY', { id: stay.id, name: stay.name });
+  res.json({ success: true });
+});
+
+app.get('/api/admin/site-settings', authMiddleware, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await getBlob('SETTINGS_FILE'));
+});
+
+app.put('/api/admin/site-settings', authMiddleware, async (req, res) => {
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed) });
+  const bad = (parsed.data.festiveThemes || []).find(t => t.from > t.to);
+  if (bad) return res.status(400).json({ error: 'A festive theme ends before it starts.' });
+  const settings = await getBlob('SETTINGS_FILE');
+  if (parsed.data.contact) settings.contact = parsed.data.contact;
+  if (parsed.data.festiveThemes) {
+    settings.festiveThemes = parsed.data.festiveThemes.map(t => ({ ...t, id: t.id || 'theme-' + randomUUID().slice(0, 8) }));
+  }
+  await setBlob('SETTINGS_FILE', settings);
+  await logAdminAction(req.adminUser, req.ip, 'UPDATE_SITE_SETTINGS', { festiveThemes: (settings.festiveThemes || []).length });
+  res.json({ success: true, settings });
+});
+
+// Photo upload. The admin page shrinks photos to WebP before sending.
+const IMAGE_TYPES = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
+const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
+app.post('/api/admin/images', authMiddleware, express.raw({ type: Object.keys(IMAGE_TYPES), limit: '4mb' }), async (req, res) => {
+  const type = (req.headers['content-type'] || '').split(';')[0].trim();
+  if (!IMAGE_TYPES[type] || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ error: 'Please upload a JPG, PNG or WebP photo under 4 MB.' });
+  }
+  const key = `img-${Date.now()}-${randomUUID().slice(0, 8)}.${IMAGE_TYPES[type]}`;
+  try {
+    const bytes = req.body.buffer.slice(req.body.byteOffset, req.body.byteOffset + req.body.byteLength);
+    await getBlobStore('images').set(key, bytes, { metadata: { contentType: type } });
+    return res.json({ success: true, url: `/api/images/${key}` });
+  } catch (err) {
+    // Local development without Netlify Blobs: save next to the site's other files.
+    try {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      fs.writeFileSync(path.join(UPLOADS_DIR, key), req.body);
+      return res.json({ success: true, url: `/uploads/${key}` });
+    } catch (e) {
+      console.error('Image upload failed:', err.message, e.message);
+      return res.status(500).json({ error: 'Could not save the photo.' });
+    }
+  }
+});
+
+app.get('/api/images/:key', async (req, res) => {
+  const key = req.params.key;
+  if (!/^img-[\w-]+\.(webp|jpg|png)$/.test(key)) return res.status(404).end();
+  try {
+    const found = await getBlobStore('images').getWithMetadata(key, { type: 'arrayBuffer' });
+    if (!found) return res.status(404).end();
+    res.setHeader('Content-Type', found.metadata?.contentType || 'image/webp');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    return res.send(Buffer.from(found.data));
+  } catch (err) {
+    const local = path.join(UPLOADS_DIR, key);
+    if (fs.existsSync(local)) return res.sendFile(local);
+    return res.status(404).end();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  GET /admin → Serve the protected admin UI
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/admin', async (req, res) => {
@@ -1062,11 +1468,17 @@ app.get('/admin', async (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   const properties = (await getBlob('HOMESTAYS_FILE'));
   const propertyOptions = properties.map(p =>
-    `<option value="${p.id}">${p.name}</option>`
+    `<option value="${sanitizeHtml(p.id)}">${sanitizeHtml(p.name)}${p.published === false ? ' (hidden)' : ''}</option>`
   ).join('');
 
   let calendarStyles = '';
   let calendarJs = '';
+  let adminExtraJs = '';
+  let adminExtraCss = '';
+  try {
+    adminExtraJs = fs.readFileSync(path.join(ROOT_DIR, 'admin', 'admin-extra.js'), 'utf-8');
+    adminExtraCss = fs.readFileSync(path.join(ROOT_DIR, 'admin', 'admin-extra.css'), 'utf-8');
+  } catch (e) { console.error('Admin extras missing:', e.message); }
   try {
     const stylesCss = fs.readFileSync(path.join(ROOT_DIR, 'styles.css'), 'utf-8');
     calendarJs = fs.readFileSync(path.join(ROOT_DIR, 'calendar.js'), 'utf-8');
@@ -1084,10 +1496,11 @@ app.get('/admin', async (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volgo Homestay — Booking Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <script>window.homestaysData = ${JSON.stringify(properties)};</script>
+  <script>window.homestaysData = ${JSON.stringify(properties).replace(/</g, '\\u003c')};</script>
   <style>
     ${calendarStyles}
     #adminCalendar .selection-summary, #adminCalendar .guest-selector-container { display: none !important; }
+    ${adminExtraCss}
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -1201,7 +1614,7 @@ app.get('/admin', async (req, res) => {
       margin-bottom: 8px;
       font-weight: 500;
     }
-    input[type="date"], input[type="text"], input[type="number"], select {
+    input[type="date"], input[type="text"], input[type="number"], input[type="password"], select {
       width: 100%;
       background: rgba(255,255,255,0.04);
       border: 1px solid var(--border);
@@ -1395,12 +1808,19 @@ app.get('/admin', async (req, res) => {
       <div class="form-row full">
         <div>
           <label>Select Property to Manage</label>
-          <select id="propertySelect" onchange="loadPeriods(); loadExternalIcal(); loadPricing();">
+          <select id="propertySelect" onchange="window.onAdminPropertyChange()">
             ${propertyOptions}
           </select>
         </div>
       </div>
+      <button type="button" id="addStayBtn" class="btn-delete ax-add" style="width:100%;">＋ Add a new stay</button>
     </div>
+
+  <!-- Stay editor: everything the website shows for the selected stay -->
+  <div class="card" id="stayEditorCard" style="grid-column: span 2;">
+    <div class="card-title">Stay Details — what guests see on the website</div>
+    <div id="stayEditor"><div class="empty-state">Loading…</div></div>
+  </div>
 
   <!-- Pricing Settings -->
   <div class="card" id="pricingSettingsCard">
@@ -1444,6 +1864,7 @@ app.get('/admin', async (req, res) => {
         <!-- Rendered dynamically -->
       </div>
     </div>
+    <div id="pricingExtras"></div>
     
     <button class="btn btn-primary" onclick="updatePricing()" style="margin-top: 24px; width: 100%;">
       💾 &nbsp; Save All Pricing & Promos
@@ -1463,6 +1884,7 @@ app.get('/admin', async (req, res) => {
         <input type="date" id="toDate">
       </div>
     </div>
+    <div id="blockUnitsBlock"></div>
     <div class="form-row full">
       <div>
         <label>Note (optional — for your reference only)</label>
@@ -1503,6 +1925,12 @@ app.get('/admin', async (req, res) => {
         </div>
       </div>
     </details>
+  </div>
+
+  <!-- Website settings -->
+  <div class="card" style="grid-column: span 2;">
+    <div class="card-title">Website Settings — contact number & festive themes</div>
+    <div id="siteSettingsBody"><div class="empty-state">Loading…</div></div>
   </div>
 
   <!-- Security Audit Logs -->
@@ -1562,6 +1990,9 @@ app.get('/admin', async (req, res) => {
   }
 
   function getPropertyId() { return document.getElementById('propertySelect').value; }
+  function esc(str) {
+    return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   let pendingDataCache = [];
   
@@ -1587,19 +2018,19 @@ app.get('/admin', async (req, res) => {
         <div class="request-card">
           <div class="request-header">
             <div>
-              <span class="request-guest">\${r.guestName}</span>
+              <span class="request-guest">\${esc(r.guestName)}</span>
               <span style="font-size:11px; color:var(--muted); margin-left:8px;">\${r.id || ''}</span>
             </div>
-            <span class="request-prop">\${r.homestayName}</span>
+            <span class="request-prop">\${esc(r.homestayName)}</span>
           </div>
           \${overlapBadge}
           <div class="request-dates">\${d1} → \${d2}</div>
-          <div class="request-details">\${r.adults} Adults, \${r.children} Children | Phone: \${r.guestPhone}</div>
-          \${r.note ? \`<div class="request-note">"\${r.note}"</div>\` : ''}
+          <div class="request-details">\${r.unitsLabel ? '<strong style="color:var(--text)">' + esc(r.unitsLabel) + '</strong> · ' : ''}\${r.totalAmount ? '₹' + Number(r.totalAmount).toLocaleString('en-IN') + ' · ' : ''}\${r.adults} Adults, \${r.children} Children | Phone: \${esc(r.guestPhone)}</div>
+          \${r.note ? \`<div class="request-note">"\${esc(r.note)}"</div>\` : ''}
           <div class="request-actions">
             <button class="btn-approve" id="approve-\${r.id}" onclick="approveRequest('\${r.id}', this)">Approve</button>
             <button class="btn-decline" id="decline-\${r.id}" onclick="declineRequest('\${r.id}', this)">Decline</button>
-            <a class="btn-whatsapp" href="https://wa.me/\${wNumber}?text=Hi \${r.guestName}, regarding your booking at \${r.homestayName}..." target="_blank">WhatsApp</a>
+            <a class="btn-whatsapp" href="https://wa.me/\${wNumber}?text=\${encodeURIComponent('Hi ' + r.guestName + ', regarding your booking at ' + r.homestayName + '...')}" target="_blank">WhatsApp</a>
             <a href="tel:\${wNumber}" style="padding: 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--text); text-decoration: none; font-size: 13px;">Call</a>
           </div>
         </div>
@@ -1672,9 +2103,10 @@ app.get('/admin', async (req, res) => {
           <div>
             <div class="period-dates">\${fmtDate(p.from)} &nbsp;→&nbsp; \${fmtDate(p.to)} \${finishedBadge}</div>
             <div class="period-duration">\${nights(p.from, p.to)}</div>
-            \${p.note ? \`<div class="period-note">\${p.note}</div>\` : ''}
+            \${p.note ? \`<div class="period-note">\${esc(p.note)}</div>\` : ''}
+            \${Array.isArray(p.units) ? \`<div class="period-note" style="color:var(--text)">Rooms: \${esc(p.units.map(id => ((window.homestaysData.find(s => s.id === getPropertyId()) || {}).rooms || []).find(r => r.id === id)?.name || id).join(', '))}</div>\` : ''}
           </div>
-          \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : \`<button class="btn-delete" onclick="removePeriod(\${p.originalIndex})">Remove</button>\`}
+          \${p.external ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">External</span>' : (p.pending ? '<span style="font-size:12px; color:var(--muted); font-style:italic;">Pending request</span>' : \`<button class="btn-delete" onclick="removePeriod(\${p.originalIndex})">Remove</button>\`)}
         </div>
       \`;
     }).join('');
@@ -1708,7 +2140,7 @@ app.get('/admin', async (req, res) => {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, note })
+      body: JSON.stringify({ from, to, note, units: window.getBlockUnits ? window.getBlockUnits() : 'whole' })
     });
     
     if (res.status === 409) {
@@ -1938,15 +2370,20 @@ app.get('/admin', async (req, res) => {
     if (isNaN(weekday) || isNaN(weekend)) {
       return showToast('Please enter valid numeric prices', 'error');
     }
+    let extra = {};
+    try { extra = window.collectExtraPricing ? window.collectExtraPricing() : {}; }
+    catch (err) { return showToast(err.message, 'error'); }
+    const pricingBody = { weekday, weekend, promos: currentPromos, ...extra };
     
     const res = await fetch('/api/homestay/' + pid + '/pricing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weekday, weekend, promos: currentPromos })
+      body: JSON.stringify(pricingBody)
     });
     
     if (res.ok) {
       showToast('Settings updated successfully!');
+      if (window.afterPricingSaved) window.afterPricingSaved(pricingBody);
       // Update local data so it stays in sync
       const prop = window.homestaysData.find(p => p.id === pid);
       if (prop) {
@@ -1954,7 +2391,8 @@ app.get('/admin', async (req, res) => {
         prop.promos = JSON.parse(JSON.stringify(currentPromos));
       }
     } else {
-      showToast('Failed to update settings', 'error');
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || 'Failed to update settings', 'error');
     }
   }
 
@@ -1964,6 +2402,7 @@ app.get('/admin', async (req, res) => {
     loadPricing();
     loadExternalIcal();
     loadPendingRequests();
+    if (window.initAdminExtras) window.initAdminExtras();
     
     // Start background polling for new requests every 10 seconds only when tab is active
     setInterval(() => {
@@ -2149,6 +2588,14 @@ app.get('/admin', async (req, res) => {
       if (data.mfaRequired) {
         document.getElementById('loginCredentialsForm').style.display = 'none';
         document.getElementById('loginOtpForm').style.display = 'flex';
+      } else {
+        // Direct authentication without OTP
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('appContainer').style.display = 'block';
+        document.getElementById('adminUserField').value = '';
+        document.getElementById('adminPassField').value = '';
+        loadAll();
+        loadAuditLogs();
       }
     } catch (err) {
       errorEl.textContent = 'Error connecting to authorization service.';
@@ -2239,6 +2686,8 @@ app.get('/admin', async (req, res) => {
     if (e.key === 'Enter') submitMfaOtp();
   });
 
+  ${adminExtraJs}
+
   initSession();
 </script>
 </body>
@@ -2253,7 +2702,32 @@ const ASSETS_DIR = path.join(ROOT_DIR, 'assets');
 // NOTE: /data is intentionally NOT served as static to protect JSON files (#15)
 app.use('/assets', express.static(ASSETS_DIR));
 
+// Fallback for SPA routing
+app.get(/.*/, (req, res) => {
+  const distIndex = path.join(DIST_DIR, 'index.html');
+  if (fs.existsSync(distIndex)) {
+    return res.sendFile(distIndex);
+  }
+  return res.sendFile(path.join(ROOT_DIR, 'index.html'));
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Start Server
 // ─────────────────────────────────────────────────────────────────────────────
-export const handler = serverless(app);
+// Photos are binary, so tell serverless-http to base64 them for Netlify.
+export const handler = serverless(app, { binary: ['image/*'] });
+
+if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  app.listen(PORT, () => {
+    const adminUser = process.env.ADMIN_USER || 'admin';
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(' VOLGO HOMESTAY — Unified Server Running Locally');
+    console.log(`\n  Public Website : http://localhost:${PORT}`);
+    console.log(`  Admin Panel    : http://localhost:${PORT}/admin`);
+    console.log(`\n  Login credentials for Admin:`);
+    console.log(`    Username: ${adminUser}`);
+    console.log(`    Password: ${process.env.ADMIN_PASS ? '***' : 'volgo123 (default)'}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  });
+}
+

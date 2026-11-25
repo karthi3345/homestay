@@ -26,3 +26,11 @@ Thumbs.db
 
 # Local Netlify folder
 .netlify
+
+# Photos uploaded through the admin panel during local development
+public/uploads/
+data/admin-otp.json
+
+*.zip
+*.patch
+test-results/

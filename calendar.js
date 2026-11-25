@@ -12,6 +12,10 @@ class HomestayCalendar {
     if (!this.container) return;
 
     this.bookedDates   = new Set(options.bookedDates || []);
+    // Nights closed by a booking rule rather than a booking (e.g. Fri/Sat when
+    // booking single rooms). Shown differently, with an explanation on hover.
+    this.isRestricted = options.isRestricted || (() => false); // (dateStr) => boolean
+    this.restrictedLabel = options.restrictedLabel || 'Not available for this booking';
     this.onSelectionChange = options.onSelectionChange || (() => {});
 
     // Show current month
@@ -34,9 +38,31 @@ class HomestayCalendar {
 
   /* ─────────────────────────────── public API ─── */
 
-  setBookedDates(dates) {
+  setBookedDates(dates, isRestricted, restrictedLabel) {
     this.bookedDates = new Set(dates);
+    this.isRestricted = typeof isRestricted === 'function' ? isRestricted : () => false;
+    if (restrictedLabel) this.restrictedLabel = restrictedLabel;
+
+    const restrLegend = this.container.querySelector('.cal-legend-restricted');
+    if (restrLegend) {
+      restrLegend.style.display = (typeof isRestricted === 'function') ? 'inline-flex' : 'none';
+    }
+
+    // Drop a selection that is no longer possible (e.g. guest switched from
+    // the whole villa to single rooms over a weekend).
+    if (this.checkIn && this._isClosed(this._fmt(this.checkIn))) {
+      this.checkIn = null; this.checkOut = null;
+      this._drawGrid(); this._notify(); return;
+    }
+    if (this.checkIn && this.checkOut && this._hasBookedBetween(this.checkIn, this.checkOut)) {
+      this.checkOut = null;
+      this._drawGrid(); this._notify(); return;
+    }
     this._drawGrid();
+  }
+
+  _isClosed(dateStr) {
+    return this.bookedDates.has(dateStr) || this.isRestricted(dateStr);
   }
 
   setMaxGuests(max) {
@@ -62,6 +88,12 @@ class HomestayCalendar {
           <button type="button" class="btn-cal-next" aria-label="Next month">
             <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill="currentColor"/></svg>
           </button>
+        </div>
+
+        <div class="calendar-legend-bar">
+          <span class="cal-legend-item"><span class="cal-legend-dot cal-dot-avail"></span> Available</span>
+          <span class="cal-legend-item"><span class="cal-legend-dot cal-dot-booked"></span> Booked</span>
+          <span class="cal-legend-item cal-legend-restricted" style="display: none;"><span class="cal-legend-dot cal-dot-restricted"></span> Villa Only</span>
         </div>
 
         <div class="calendar-weekdays">
@@ -116,12 +148,14 @@ class HomestayCalendar {
     const coMs = this.checkOut ? this.checkOut.getTime() : null;
     const hvMs = this.hoverDate ? this.hoverDate.getTime() : null;
 
-    // Determine the first booked date strictly after check-in (for range cap)
+    // First closed night after check-in. Guests may check OUT that morning,
+    // but can't stay past it.
     let capMs = null;
     if (ciMs && !coMs) {
-      for (const s of this.bookedDates) {
-        const t = this._strToMs(s);
-        if (t > ciMs && (capMs === null || t < capMs)) capMs = t;
+      const d = new Date(this.checkIn);
+      for (let i = 0; i < 366; i++) {
+        d.setDate(d.getDate() + 1);
+        if (this._isClosed(this._fmt(d))) { capMs = this._midnight(d).getTime(); break; }
       }
     }
 
@@ -142,6 +176,8 @@ class HomestayCalendar {
       const isPast   = ms <= today.getTime();
       const isTooFar = ms > today.getTime() + (365 * 24 * 60 * 60 * 1000);
       const isBooked = this.bookedDates.has(dateStr);
+      const isRestricted = !isBooked && this.isRestricted(dateStr);
+      const isCheckoutOnly = capMs !== null && ms === capMs && !isPast && !isTooFar;
 
       const el = document.createElement('div');
       el.className = 'calendar-day';
@@ -149,10 +185,24 @@ class HomestayCalendar {
       el.dataset.date = dateStr;
       el.dataset.ms   = ms;
 
-      if (isPast || isTooFar || isBooked) {
-        // Hard disabled: past, today, too far, or booked
-        el.classList.add('unavailable');
-      } else if (capMs !== null && ms >= capMs) {
+      if (isCheckoutOnly) {
+        // Booked/closed night, but fine as a check-out morning
+        el.classList.add('available', 'checkout-only');
+        el.title = 'Check-out only';
+        if (hvMs && ms === hvMs) el.classList.add('hover-range', 'hover-end');
+      } else if (isBooked) {
+        // Explicitly Booked / Reserved Date
+        el.classList.add('unavailable', 'booked');
+        el.title = 'Already Booked / Reserved';
+      } else if (isRestricted) {
+        // Restricted date (e.g. Fri/Sat whole villa only)
+        el.classList.add('unavailable', 'restricted');
+        el.title = this.restrictedLabel || 'Fri & Sat: Whole villa only';
+      } else if (isPast || isTooFar) {
+        // Past or too far
+        el.classList.add('unavailable', 'past');
+        el.title = isPast ? 'Past date' : 'Date beyond 1 year';
+      } else if (capMs !== null && ms > capMs) {
         // Soft disabled: beyond a booked cap after check-in
         // Still clickable (resets check-in), but styled as unavailable
         el.classList.add('cap-blocked');
@@ -209,7 +259,14 @@ class HomestayCalendar {
     // Click: date selection
     grid.addEventListener('click', (e) => {
       const cell = e.target.closest('.calendar-day');
-      if (!cell || cell.classList.contains('empty-day') || cell.classList.contains('unavailable')) return;
+      if (!cell || cell.classList.contains('empty-day')) return;
+
+      if (cell.classList.contains('booked')) {
+        cell.classList.add('cell-shake');
+        setTimeout(() => cell.classList.remove('cell-shake'), 350);
+        return;
+      }
+      if (cell.classList.contains('unavailable')) return;
 
       const ms   = Number(cell.dataset.ms);
       const date = new Date(ms);
@@ -289,12 +346,14 @@ class HomestayCalendar {
   }
 
   _hasBookedBetween(start, end) {
-    // Checks for any booked date strictly between start (exclusive) and end (exclusive)
+    // Checks for any closed night from start (inclusive) to end (exclusive)
     const startMs = start.getTime();
     const endMs   = end.getTime();
-    for (const s of this.bookedDates) {
-      const t = this._strToMs(s);
-      if (t > startMs && t < endMs) return true;
+    // Nights from check-in up to (not including) check-out must all be open.
+    const d = new Date(startMs);
+    while (d.getTime() < endMs) {
+      if (this._isClosed(this._fmt(d))) return true;
+      d.setDate(d.getDate() + 1);
     }
     return false;
   }

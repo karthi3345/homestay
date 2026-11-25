@@ -6,7 +6,7 @@
   SECRETS_SCAN_ENABLED = "false"
 
 [functions]
-  included_files = ["data/homestays.json", "styles.css", "calendar.js"]
+  included_files = ["data/homestays.json", "data/site-settings.json", "styles.css", "calendar.js", "admin/**"]
 
 [functions.sync]
   schedule = "*/15 * * * *"
