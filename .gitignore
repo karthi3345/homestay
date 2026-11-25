@@ -34,3 +34,5 @@ data/admin-otp.json
 *.zip
 *.patch
 test-results/
+
+.vercel
