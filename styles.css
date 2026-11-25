@@ -1648,7 +1648,7 @@ a.contact-value:hover {
   .viewport-layout {
     display: flex !important;
     flex-direction: column !important;
-    padding: 60px 14px 24px 14px !important;
+    padding: 72px 14px 28px 14px !important;
     gap: 20px !important;
     width: 100% !important;
     box-sizing: border-box !important;
@@ -1778,8 +1778,8 @@ a.contact-value:hover {
   
   .card-nav {
     position: sticky;
-    top: 0;
-    z-index: 1000;
+    top: 50px !important;
+    z-index: 999;
     background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -1798,7 +1798,55 @@ a.contact-value:hover {
   }
 
   .card-content-wrapper {
-    padding: 18px 14px 44px !important;
+    padding: 16px 14px 44px !important;
+  }
+
+  .booking-form-title,
+  .pane-title {
+    font-size: 22px !important;
+    line-height: 1.25 !important;
+    margin-bottom: 16px !important;
+  }
+
+  .booking-rates-banner {
+    padding: 9px 12px !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+  }
+
+  #bookingRatesDisplay {
+    font-size: 12.5px !important;
+  }
+
+  .pondicherry-location-card {
+    border-radius: 12px !important;
+  }
+
+  .pondicherry-header-btn {
+    padding: 10px 12px !important;
+  }
+
+  .unit-options {
+    gap: 7px !important;
+  }
+
+  .unit-option {
+    padding: 9px 12px !important;
+    border-radius: 10px !important;
+    gap: 8px !important;
+  }
+
+  .unit-name {
+    font-size: 13.5px !important;
+    line-height: 1.3 !important;
+  }
+
+  .unit-meta {
+    font-size: 11.5px !important;
+  }
+
+  .unit-price {
+    font-size: 13.5px !important;
   }
 
   /* Booking inputs on mobile: 16px font prevents iOS auto-zoom */
@@ -1809,14 +1857,15 @@ a.contact-value:hover {
   }
 
   .input-group label {
-    font-size: 10.5px !important;
+    font-size: 11px !important;
+    margin-bottom: 4px !important;
   }
 
   .input-group input,
   .input-group input.highlight-input,
   .booking-note-input {
     font-size: 16px !important;
-    padding: 12px 10px !important;
+    padding: 11px 10px !important;
     border-radius: 10px !important;
   }
 
@@ -1826,17 +1875,17 @@ a.contact-value:hover {
   }
 
   .guest-btn {
-    width: 30px !important;
-    height: 30px !important;
+    width: 32px !important;
+    height: 32px !important;
     font-size: 16px !important;
   }
 
   .guest-title {
-    font-size: 12px !important;
+    font-size: 12.5px !important;
   }
 
   .guest-subtitle {
-    font-size: 10px !important;
+    font-size: 10.5px !important;
   }
 
   .floating-whatsapp-btn {
