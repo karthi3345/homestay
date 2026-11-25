@@ -2716,6 +2716,7 @@ app.get(/.*/, (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Photos are binary, so tell serverless-http to base64 them for Netlify.
 export const handler = serverless(app, { binary: ['image/*'] });
+export default app;
 
 if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   app.listen(PORT, () => {
