@@ -684,7 +684,10 @@ app.post('/api/admin/login', applyRateLimit, async (req, res) => {
   const targetUser = process.env.ADMIN_USER || 'admin';
   const targetPass = process.env.ADMIN_PASS || 'volgo123';
 
-  if (username !== targetUser || password !== targetPass) {
+  const cleanUser = typeof username === 'string' ? username.trim().toLowerCase() : '';
+  const cleanPass = typeof password === 'string' ? password.trim() : '';
+
+  if (cleanUser !== targetUser.toLowerCase() || cleanPass !== targetPass) {
     return res.status(401).json({ error: 'Invalid username or password.' });
   }
 
