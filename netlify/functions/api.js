@@ -376,14 +376,7 @@ const staySchema = z.object({
 
 const settingsSchema = z.object({
   contact: z.object({ phone: shortText(30), whatsapp: shortText(30), email: shortText(100) }).optional(),
-  backgroundImages: z.array(imagePath).max(10).optional().default([]),
-  festiveThemes: z.array(z.object({
-    id: z.string().max(40).optional(),
-    theme: z.enum(Rules.FESTIVE_THEMES),
-    from: dateStr,
-    to: dateStr,
-    enabled: z.boolean().optional().default(true)
-  })).max(30).optional()
+  backgroundImages: z.array(imagePath).max(10).optional().default([])
 });
 
 function zodMessage(parsed) {
@@ -493,19 +486,17 @@ app.get('/api/homestays', async (req, res) => {
   }
 });
 
-// GET /api/site-settings – public contact details, background images, and today's festive theme.
-// The theme is picked here on the server from the admin's schedule.
+// GET /api/site-settings – public contact details and background images.
 app.get('/api/site-settings', async (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
   try {
     const settings = await getBlob('SETTINGS_FILE');
     res.json({
       contact: settings.contact || {},
-      backgroundImages: Array.isArray(settings.backgroundImages) ? settings.backgroundImages : [],
-      festiveTheme: Rules.activeFestiveTheme(settings.festiveThemes, todayInIndia())
+      backgroundImages: Array.isArray(settings.backgroundImages) ? settings.backgroundImages : []
     });
   } catch (err) {
-    res.json({ contact: {}, backgroundImages: [], festiveTheme: null });
+    res.json({ contact: {}, backgroundImages: [] });
   }
 });
 
@@ -1407,16 +1398,12 @@ app.get('/api/admin/site-settings', authMiddleware, async (req, res) => {
 app.put('/api/admin/site-settings', authMiddleware, async (req, res) => {
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed) });
-  const bad = (parsed.data.festiveThemes || []).find(t => t.from > t.to);
-  if (bad) return res.status(400).json({ error: 'A festive theme ends before it starts.' });
   const settings = await getBlob('SETTINGS_FILE');
   if (parsed.data.contact) settings.contact = parsed.data.contact;
   if (Array.isArray(parsed.data.backgroundImages)) settings.backgroundImages = parsed.data.backgroundImages;
-  if (parsed.data.festiveThemes) {
-    settings.festiveThemes = parsed.data.festiveThemes.map(t => ({ ...t, id: t.id || 'theme-' + randomUUID().slice(0, 8) }));
-  }
+  delete settings.festiveThemes;
   await setBlob('SETTINGS_FILE', settings);
-  await logAdminAction(req.adminUser, req.ip, 'UPDATE_SITE_SETTINGS', { festiveThemes: (settings.festiveThemes || []).length });
+  await logAdminAction(req.adminUser, req.ip, 'UPDATE_SITE_SETTINGS', { backgroundImages: (settings.backgroundImages || []).length });
   res.json({ success: true, settings });
 });
 
@@ -1932,7 +1919,7 @@ app.get('/admin', async (req, res) => {
 
   <!-- Website settings -->
   <div class="card" style="grid-column: span 2;">
-    <div class="card-title">Website Settings — contact number & festive themes</div>
+    <div class="card-title">Website Settings — contact number & background images</div>
     <div id="siteSettingsBody"><div class="empty-state">Loading…</div></div>
   </div>
 

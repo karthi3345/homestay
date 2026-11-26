@@ -573,32 +573,11 @@
     };
     renderBgImages();
 
-    let themes = clone(settings.festiveThemes || []);
-    const themesBox = h('div');
-    const NAMES = { christmas: 'Christmas', diwali: 'Diwali', pongal: 'Pongal', newyear: 'New Year' };
-    const renderThemes = () => {
-      themesBox.innerHTML = '';
-      themes.forEach((t, i) => {
-        const sel = h('select', { onchange: e => { t.theme = e.target.value; } }, ...Object.entries(NAMES).map(([v, l]) => h('option', { value: v }, l)));
-        sel.value = t.theme;
-        themesBox.appendChild(h('div', { class: 'ax-row' }, sel,
-          h('input', { type: 'date', value: t.from, title: 'From', oninput: e => { t.from = e.target.value; } }),
-          h('input', { type: 'date', value: t.to, title: 'To', oninput: e => { t.to = e.target.value; } }),
-          h('label', { class: 'ax-switch' }, h('input', { type: 'checkbox', checked: t.enabled !== false, onchange: e => { t.enabled = e.target.checked; } }), h('span', {}, 'On')),
-          h('button', { type: 'button', class: 'btn-delete', onclick: () => { themes.splice(i, 1); renderThemes(); } }, '✕')));
-      });
-      themesBox.appendChild(h('button', { type: 'button', class: 'btn-delete ax-add', onclick: () => {
-        themes.push({ theme: 'christmas', from: '', to: '', enabled: true }); renderThemes();
-      } }, '＋ Schedule a festive theme'));
-    };
-    renderThemes();
     const save = h('button', { type: 'button', class: 'btn btn-primary', onclick: async () => {
-      if (themes.some(t => !t.from || !t.to)) return showToast('Each festive theme needs start and end dates', 'error');
       try {
         await api('/api/admin/site-settings', 'PUT', {
           contact: { phone: phone.value.trim(), whatsapp: whatsapp.value.trim(), email: email.value.trim() },
-          backgroundImages: bgImages,
-          festiveThemes: themes
+          backgroundImages: bgImages
         });
         showToast('Website settings saved');
       } catch (err) { showToast(err.message, 'error'); }
@@ -611,9 +590,7 @@
       h('div', { class: 'card-title', style: 'margin:24px 0 8px' }, '📞 Contact details'),
       h('div', { class: 'ax-hint', style: 'margin-bottom:12px' }, 'The number guests call and message. A stay uses these unless it has its own number.'),
       h('div', { class: 'ax-grid3' }, field('Phone', phone), field('WhatsApp', whatsapp), field('Email', email)),
-      h('div', { class: 'card-title', style: 'margin:24px 0 8px' }, '🎉 Festive themes'),
-      h('div', { class: 'ax-hint', style: 'margin-bottom:12px' }, 'Set these up in advance. The website switches the theme on and off by itself on these dates (India time).'),
-      themesBox, save);
+      save);
   }
 
   /* ── wiring ─────────────────────────────────────────────────────────── */

@@ -27,7 +27,7 @@ const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 
 document.addEventListener('DOMContentLoaded', () => {
   let homestays = [];
-  let siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [] };
+  let siteSettings = { contact: {}, backgroundImages: [] };
   let bgSlideshowTimer = null;
   let bgSlideIndex = 0;
   let bookingSelection = { type: 'whole' }; // whole villa or chosen rooms
@@ -1733,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (Array.isArray(cachedStays) && cachedStays.length) {
         homestays = cachedStays;
         if (rawSettings) {
-          siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [], ...JSON.parse(rawSettings) };
+          siteSettings = { contact: {}, backgroundImages: [], ...JSON.parse(rawSettings) };
           applySiteSettings();
         }
         const wanted = new URLSearchParams(location.search).get('stay');
@@ -1749,13 +1749,13 @@ document.addEventListener('DOMContentLoaded', () => {
     console.warn('Cache hydration skipped:', e);
   }
 
-  // Load site settings (contact number, festive theme) and the stays together from server.
+  // Load site settings (contact number & background images) and the stays together from server.
   Promise.all([
     fetch('/api/site-settings').then(r => (r.ok ? r.json() : {})).catch(() => ({})),
     fetch('/api/homestays').then(res => res.json())
   ])
     .then(([settings, data]) => {
-      siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [], ...settings };
+      siteSettings = { contact: {}, backgroundImages: [], ...settings };
       applySiteSettings();
       const freshStays = Array.isArray(data) ? data : [];
       if (!freshStays.length) return;
@@ -1781,9 +1781,6 @@ document.addEventListener('DOMContentLoaded', () => {
     .catch(err => console.error("Error loading homestay data:", err));
 
   function applySiteSettings() {
-    const theme = siteSettings.festiveTheme;
-    document.body.classList.forEach(c => { if (c.startsWith('festive-')) document.body.classList.remove(c); });
-    if (theme) document.body.classList.add(`festive-${theme}`);
     const phone = siteSettings.contact?.phone;
     const headerContact = document.getElementById('headerContact');
     if (headerContact && phone) {
