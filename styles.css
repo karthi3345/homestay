@@ -395,16 +395,15 @@ body {
   width: 100%;
   height: 100%;
   min-height: 0; /* Constrain flex item height */
-  background: rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(24px) saturate(190%) contrast(105%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%) contrast(105%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: #fdf6ee;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid #e8ddd0;
   border-radius: 32px;
-  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.22), 0 4px 16px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 12px 40px rgba(20, 35, 50, 0.14);
   display: flex;
   flex-direction: column;
   position: relative;
-  /* overflow: hidden removed — it clips backdrop-filter in some browsers */
   transition: var(--transition-smooth);
 }
 
@@ -1149,10 +1148,14 @@ body {
 .input-group.full-width {
   grid-column: 1 / -1;
 }
+.booking-contact-inputs > * {
+  min-width: 0;
+}
 .input-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 /* Adjustable Guest Counter Box */
@@ -1814,11 +1817,11 @@ a.contact-value:hover {
     position: relative !important;
     top: auto !important;
     z-index: 20 !important;
-    background: rgba(255, 255, 255, 0.45) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    background: #f5ece0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+    border-bottom: 1px solid #e8ddd0 !important;
     border-radius: 22px 22px 0 0 !important;
   }
 
@@ -1855,6 +1858,8 @@ a.contact-value:hover {
     padding: 9px 12px !important;
     font-size: 12px !important;
     border-radius: 10px !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
   }
 
   #bookingRatesDisplay {
@@ -1894,7 +1899,7 @@ a.contact-value:hover {
 
   /* Booking inputs on mobile: 16px font prevents iOS auto-zoom */
   .booking-contact-inputs {
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     gap: 10px !important;
     margin-bottom: 12px !important;
   }
@@ -4209,7 +4214,7 @@ body.map-fullscreen-active #floatingWhatsappBtn {
     width: 100% !important;
   }
   .booking-contact-inputs {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
