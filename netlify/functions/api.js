@@ -2569,15 +2569,7 @@ app.get('/admin', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
-      const rawText = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseErr) {
-        errorEl.textContent = `Server returned non-JSON (HTTP ${res.status}): ${rawText.slice(0, 80)}`;
-        errorEl.style.display = 'block';
-        return;
-      }
+      const data = await res.json();
       if (!res.ok) {
         errorEl.textContent = data.error || 'Authentication failed.';
         errorEl.style.display = 'block';
@@ -2618,15 +2610,7 @@ app.get('/admin', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ otp })
       });
-      const rawText = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseErr) {
-        errorEl.textContent = `Server returned non-JSON (HTTP ${res.status}): ${rawText.slice(0, 80)}`;
-        errorEl.style.display = 'block';
-        return;
-      }
+      const data = await res.json();
       if (!res.ok) {
         errorEl.textContent = data.error || 'Invalid verification code.';
         errorEl.style.display = 'block';
@@ -2665,15 +2649,7 @@ app.get('/admin', async (req, res) => {
   async function initSession() {
     try {
       const res = await fetch('/api/admin/check-session');
-      const rawText = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseErr) {
-        errorEl.textContent = `Server returned non-JSON (HTTP ${res.status}): ${rawText.slice(0, 80)}`;
-        errorEl.style.display = 'block';
-        return;
-      }
+      const data = await res.json();
       if (data.authenticated) {
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('appContainer').style.display = 'block';
