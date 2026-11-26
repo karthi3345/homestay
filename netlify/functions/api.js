@@ -374,8 +374,6 @@ const staySchema = z.object({
   })).max(10).optional().default([])
 });
 
-const imagePath = z.string().max(300).regex(/^(\/api\/images\/[\w.-]+|\/?assets\/[\w./-]+|\/uploads\/[\w.-]+|https?:\/\/[^\s"'<>()]+)$/, 'Invalid image address');
-
 const settingsSchema = z.object({
   contact: z.object({ phone: shortText(30), whatsapp: shortText(30), email: shortText(100) }).optional(),
   backgroundImages: z.array(imagePath).max(10).optional().default([]),
