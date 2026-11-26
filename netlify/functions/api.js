@@ -678,7 +678,8 @@ async function deleteOtp() {
 
 // POST /api/admin/login
 app.post('/api/admin/login', applyRateLimit, async (req, res) => {
-  const { username, password } = req.body;
+  try {
+  const { username, password } = req.body || {};
   const targetUser = process.env.ADMIN_USER || 'admin';
   const targetPass = process.env.ADMIN_PASS || 'volgo123';
 
@@ -724,6 +725,9 @@ app.post('/api/admin/login', applyRateLimit, async (req, res) => {
     res.json({ success: true, mfaRequired: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal system error initializing MFA.' });
+  }
+  } catch (outerErr) {
+    res.status(500).json({ error: outerErr.message || 'Login handler error' });
   }
 });
 
