@@ -404,7 +404,7 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  /* overflow: hidden removed — it clips backdrop-filter in some browsers */
   transition: var(--transition-smooth);
 }
 
@@ -5055,65 +5055,73 @@ body, button, input, textarea, select {
   letter-spacing: -0.4px !important;
 }
 
-/* 3. Fallback for browsers without backdrop-filter */
+/* ============================================================
+   BOOKING PANEL — FROSTED GLASS (Glassmorphism)
+   backdrop-filter works on the panel element itself.
+   Children remain fully opaque / sharp.
+   ============================================================ */
+
+/* Fallback: browsers without backdrop-filter get a near-opaque white */
 @supports not (backdrop-filter: blur(1px)) {
   .glass-card, .card {
-    background: #ffffff !important;
+    background: rgba(255, 255, 255, 0.96) !important;
   }
 }
 
-/* 1. Main booking card container (the panel holding the tabs and form) */
+/* Main card — translucent so the blurred background shows through */
 .glass-card, .card {
-  background: #ffffff !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(10px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    0 12px 40px rgba(20, 35, 50, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.70) !important;
   position: relative !important;
-  overflow: hidden !important;
+  /* Do NOT set overflow:hidden here — it breaks backdrop-filter rendering */
 }
 
-/* Glossy shine removed */
+/* Remove any leftover pseudo shine */
 .glass-card::before, .card::before {
   content: none !important;
 }
 
+/* Inner wrapper — transparent so panel blur shows through */
 .border-glow-inner {
   position: relative !important;
   z-index: 1 !important;
   background: transparent !important;
 }
 
+/* Tab nav bar — solid so text stays sharp, no nested blur */
 .card-nav {
   position: relative !important;
   top: auto !important;
   z-index: 20 !important;
-  background: #f8fafc !important;
+  background: rgba(255, 255, 255, 0.90) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.80) !important;
 }
 
 .nav-tab.active {
-  background: #ffffff !important;
+  background: rgba(255, 255, 255, 0.95) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
 @media (max-width: 900px) {
   .card-nav {
-    position: relative !important;
-    top: auto !important;
-    z-index: 20 !important;
-    background: #f8fafc !important;
+    background: rgba(255, 255, 255, 0.90) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06) !important;
-    border-bottom: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.80) !important;
     border-radius: 22px 22px 0 0 !important;
   }
 }
 
+/* Content wrapper and panes — transparent, no blur */
 .card-content-wrapper,
 .tab-pane,
 .booking-form-inline {
@@ -5122,19 +5130,18 @@ body, button, input, textarea, select {
   background: transparent !important;
 }
 
-/* 2. Inner boxes & High-Visibility Lettering */
+/* Inner form elements — solid white so they read cleanly over the blurred panel */
 .pondicherry-location-card,
-.booking-rates-banner,
 .input-group input,
 .booking-note-input,
 .input-clean,
 .guest-counter-box {
-  background: #f8fafc !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 1px solid #e2e8f0 !important;
+  border: 1px solid rgba(226, 232, 240, 0.90) !important;
   color: #0f172a !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05) !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06) !important;
 }
 
 /* High-Contrast Letters & Typography */
