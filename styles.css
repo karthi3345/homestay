@@ -1,3 +1,8 @@
+@import "tailwindcss";
+@source "./index.html";
+@source "./app.js";
+@source "./calendar.js";
+
 /* Premium CSS Styling for Volgo Homestays */
 
 /* Reset & Variables */

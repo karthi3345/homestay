@@ -12,7 +12,9 @@
     "test:e2e": "node tests/e2e-map-controls.test.mjs"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
     "playwright": "^1.65.1",
+    "tailwindcss": "^4.3.5",
     "vite": "^8.1.3"
   },
   "dependencies": {
