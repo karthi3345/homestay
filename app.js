@@ -1830,7 +1830,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (_) {}
   }
-  setInterval(syncLiveUpdates, 15000);
+  setInterval(syncLiveUpdates, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncLiveUpdates(); });
 
   function applySiteSettings() {
