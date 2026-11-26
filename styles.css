@@ -43,7 +43,7 @@
   --color-text-secondary: var(--navy-2); /* #0f3a5c */
   --color-text-muted: var(--muted);    /* #6d6a66 */
   
-  --glass-bg: rgba(253, 246, 238, 0.94);
+  --glass-bg: rgba(253, 246, 238, 0.85);
   --glass-border: rgba(255, 255, 255, 0.85);
   --glass-shadow: var(--shadow);
   
