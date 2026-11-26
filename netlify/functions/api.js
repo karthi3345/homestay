@@ -1659,8 +1659,9 @@ app.get('/admin', async (req, res) => {
       .logo-divider { display: none !important; }
       .container, main, #appContainer { padding: 12px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
       .card, .panel, section { padding: 16px 14px !important; margin-bottom: 14px !important; border-radius: 14px !important; width: 100% !important; max-width: 100% !important; }
-      .tabs, .tab-bar { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; width: 100% !important; }
-      .tab-btn { flex: 1 1 45% !important; text-align: center !important; padding: 10px 8px !important; font-size: 13px !important; min-height: 42px !important; }
+      .tabs, .tab-bar { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; gap: 8px !important; width: 100% !important; padding-bottom: 4px !important; scrollbar-width: none !important; }
+      .tabs::-webkit-scrollbar, .tab-bar::-webkit-scrollbar { display: none !important; }
+      .tab-btn { flex: 0 0 auto !important; white-space: nowrap !important; text-align: center !important; padding: 10px 16px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 10px !important; }
       .form-row, .grid, .grid-2, .grid-3, .form-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; width: 100% !important; }
       .card > div, .panel > div { max-width: 100% !important; }
       input, select, textarea { width: 100% !important; max-width: 100% !important; font-size: 16px !important; min-height: 44px !important; }
