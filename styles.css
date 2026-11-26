@@ -1918,14 +1918,30 @@ a.contact-value:hover {
   }
 
   .guest-counter-box {
-    padding: 8px 12px !important;
+    padding: 8px 10px !important;
     border-radius: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .guest-counter-item {
+    gap: 6px !important;
+    min-width: 0 !important;
+    justify-content: space-between !important;
+  }
+
+  .guest-counter-divider {
+    margin: 0 8px !important;
+    height: 28px !important;
+    flex-shrink: 0 !important;
   }
 
   .guest-btn {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important;
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 15px !important;
+    flex-shrink: 0 !important;
   }
 
   .guest-title {
