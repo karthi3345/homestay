@@ -2588,7 +2588,7 @@ app.get('/admin', async (req, res) => {
         loadAuditLogs();
       }
     } catch (err) {
-      errorEl.textContent = 'Error connecting to authorization service.';
+      errorEl.textContent = 'Error connecting to authorization service: ' + (err && err.message ? err.message : 'Unknown error');
       errorEl.style.display = 'block';
     }
   }
