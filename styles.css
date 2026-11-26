@@ -3175,7 +3175,62 @@ a.contact-value:hover {
   justify-content: center;
 }
 
+/* Mobile Double-Tap Map Movement Hint Pill (Only in mobile view) */
+.mobile-map-lock-badge {
+  display: none !important;
+}
 
+@media (max-width: 900px) {
+  .mobile-map-lock-badge {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 25;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255, 255, 255, 0.4);
+    border-radius: 999px;
+    color: #ffffff;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto;
+    transition: all 0.25s ease;
+  }
+
+  .mobile-map-lock-badge.active {
+    background: #ea580c !important;
+    border-color: #ffffff !important;
+    box-shadow: 0 4px 18px rgba(234, 88, 12, 0.5) !important;
+  }
+
+  .mobile-map-lock-badge.flash {
+    transform: scale(1.06);
+    background: rgba(15, 23, 42, 0.98);
+    border-color: #f97316;
+  }
+
+  .mobile-map-lock-badge .mmlb-icon {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  /* When locked on mobile, let touch drags scroll the page */
+  .stays-map canvas,
+  .stays-map .maplibregl-canvas,
+  .maptiler-map-instance canvas {
+    touch-action: pan-y;
+  }
+}
 
 .ctrl-svg {
   flex-shrink: 0;

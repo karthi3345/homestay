@@ -147,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .addTo(stayMap);
 
           setupStayMapStyleSwitches();
+          setupMobileDoubleTapMapControl(stayMap, container, container.parentElement);
         } else {
           stayMap.flyTo({
             center: [lng, lat],
@@ -1148,6 +1149,162 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Mobile double-tap map interaction handler: only double-tap moves map in mobile view
+  function setupMobileDoubleTapMapControl(mapInstance, mapContainer, frameContainer) {
+    if (!mapInstance || !mapContainer) return;
+
+    const isMobile = () => window.innerWidth <= 900;
+    const target = frameContainer || mapContainer;
+
+    let badge = target.querySelector('.mobile-map-lock-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'mobile-map-lock-badge';
+      badge.setAttribute('role', 'status');
+      badge.innerHTML = '<span class="mmlb-icon">👆</span><span class="mmlb-text">Double tap to move map</span>';
+      target.appendChild(badge);
+    }
+
+    let isUnlocked = false;
+    let unlockTimer = null;
+    let lastTapTime = 0;
+
+    function updateTouchAction() {
+      try {
+        const canvas = mapInstance.getCanvas();
+        if (canvas) {
+          if (isMobile()) {
+            canvas.style.touchAction = isUnlocked ? 'none' : 'pan-y';
+          } else {
+            canvas.style.touchAction = 'none';
+          }
+        }
+      } catch (e) {}
+    }
+
+    function unlock() {
+      isUnlocked = true;
+      try {
+        mapInstance.dragPan.enable();
+        mapInstance.touchZoomRotate.enable();
+        mapInstance.doubleClickZoom.disable();
+      } catch (e) {}
+      updateTouchAction();
+      if (badge) {
+        badge.classList.add('active');
+        badge.innerHTML = '<span class="mmlb-icon">🗺️</span><span class="mmlb-text">Map active • Tap to lock</span>';
+      }
+      resetAutoLock();
+    }
+
+    function lock() {
+      if (!isMobile()) return;
+      isUnlocked = false;
+      try {
+        mapInstance.dragPan.disable();
+        mapInstance.touchZoomRotate.disable();
+        mapInstance.doubleClickZoom.disable();
+      } catch (e) {}
+      updateTouchAction();
+      if (badge) {
+        badge.classList.remove('active');
+        badge.innerHTML = '<span class="mmlb-icon">👆</span><span class="mmlb-text">Double tap to move map</span>';
+      }
+      if (unlockTimer) {
+        clearTimeout(unlockTimer);
+        unlockTimer = null;
+      }
+    }
+
+    function resetAutoLock() {
+      if (unlockTimer) clearTimeout(unlockTimer);
+      unlockTimer = setTimeout(() => {
+        lock();
+      }, 7000);
+    }
+
+    function flashBadge() {
+      if (badge && !isUnlocked) {
+        badge.classList.add('flash');
+        setTimeout(() => badge.classList.remove('flash'), 350);
+      }
+    }
+
+    function syncViewport() {
+      if (isMobile()) {
+        lock();
+      } else {
+        isUnlocked = true;
+        try {
+          mapInstance.dragPan.enable();
+          mapInstance.touchZoomRotate.enable();
+          mapInstance.doubleClickZoom.enable();
+        } catch (e) {}
+        updateTouchAction();
+        if (badge) {
+          badge.classList.remove('active');
+        }
+      }
+    }
+
+    target.addEventListener('touchstart', (e) => {
+      if (!isMobile()) return;
+
+      if (e.target.closest('.stay-map-pin, .ctrl-btn, .mobile-map-lock-badge, .mgb-btn, .maptiler-stay-marker, button')) {
+        return;
+      }
+
+      if (e.touches && e.touches.length >= 2) {
+        unlock();
+        return;
+      }
+
+      const now = Date.now();
+      const diff = now - lastTapTime;
+
+      if (diff < 360 && diff > 30) {
+        lastTapTime = 0;
+        unlock();
+      } else {
+        lastTapTime = now;
+        if (!isUnlocked) {
+          flashBadge();
+        } else {
+          resetAutoLock();
+        }
+      }
+    }, { passive: true });
+
+    target.addEventListener('touchmove', () => {
+      if (!isMobile()) return;
+      if (isUnlocked) {
+        resetAutoLock();
+      }
+    }, { passive: true });
+
+    if (badge) {
+      badge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isUnlocked) lock();
+        else unlock();
+      });
+    }
+
+    document.addEventListener('touchstart', (e) => {
+      if (!isMobile() || !isUnlocked) return;
+      if (!target.contains(e.target)) {
+        lock();
+      }
+    }, { passive: true });
+
+    window.addEventListener('resize', syncViewport);
+
+    mapInstance.on('load', () => {
+      syncViewport();
+    });
+    syncViewport();
+  }
+
   function initStaysMap() {
     const container = document.getElementById('staysMap');
     if (!container || typeof window.maptilersdk === 'undefined' || staysMap) return;
@@ -1171,6 +1328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         attributionControl: { compact: true }
       });
       window.staysMap = staysMap;
+      setupMobileDoubleTapMapControl(staysMap, container, document.getElementById('staysMapFrame'));
 
       function initSeaWaves() {
         if (!staysMap || staysMap.getSource('sea-waves-source')) return;
