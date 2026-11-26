@@ -27,7 +27,9 @@ const toDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 
 document.addEventListener('DOMContentLoaded', () => {
   let homestays = [];
-  let siteSettings = { contact: {}, festiveTheme: null };
+  let siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [] };
+  let bgSlideshowTimer = null;
+  let bgSlideIndex = 0;
   let bookingSelection = { type: 'whole' }; // whole villa or chosen rooms
   let currentPeriods = [];                  // booked periods for the current stay
   let currentHomestay = null;
@@ -1731,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (Array.isArray(cachedStays) && cachedStays.length) {
         homestays = cachedStays;
         if (rawSettings) {
-          siteSettings = { contact: {}, festiveTheme: null, ...JSON.parse(rawSettings) };
+          siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [], ...JSON.parse(rawSettings) };
           applySiteSettings();
         }
         const wanted = new URLSearchParams(location.search).get('stay');
@@ -1753,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/homestays').then(res => res.json())
   ])
     .then(([settings, data]) => {
-      siteSettings = { contact: {}, festiveTheme: null, ...settings };
+      siteSettings = { contact: {}, festiveTheme: null, backgroundImages: [], ...settings };
       applySiteSettings();
       const freshStays = Array.isArray(data) ? data : [];
       if (!freshStays.length) return;
@@ -1794,6 +1796,53 @@ document.addEventListener('DOMContentLoaded', () => {
     if (floatingWa) floatingWa.href = waHref;
     const headerWa = document.getElementById('headerWhatsapp');
     if (headerWa) headerWa.href = waHref;
+
+    updateBackgroundSlideshow(siteSettings.backgroundImages);
+  }
+
+  /** Seamless rotating background canvas from admin images */
+  function updateBackgroundSlideshow(images) {
+    const container = document.getElementById('app-background');
+    if (!container) return;
+
+    if (bgSlideshowTimer) {
+      clearInterval(bgSlideshowTimer);
+      bgSlideshowTimer = null;
+    }
+
+    const list = Array.isArray(images) ? images.filter(Boolean) : [];
+    if (!list.length) {
+      container.classList.remove('has-slides');
+      container.innerHTML = '';
+      return;
+    }
+
+    container.classList.add('has-slides');
+    container.innerHTML = '';
+
+    // Create slides with smooth opacity transitions
+    const slideEls = list.map((src, idx) => {
+      const slide = document.createElement('div');
+      slide.className = 'bg-slide' + (idx === 0 ? ' active' : '');
+      const cleanSrc = (/^(https?:)?\//.test(src) ? src : '/' + src);
+      slide.style.backgroundImage = `url('${cleanSrc}')`;
+      container.appendChild(slide);
+      return slide;
+    });
+
+    // Add luxury ambient gradient overlay on top of rotating slides
+    const overlay = document.createElement('div');
+    overlay.className = 'page-bg-overlay';
+    container.appendChild(overlay);
+
+    if (slideEls.length > 1) {
+      bgSlideIndex = 0;
+      bgSlideshowTimer = setInterval(() => {
+        slideEls[bgSlideIndex].classList.remove('active');
+        bgSlideIndex = (bgSlideIndex + 1) % slideEls.length;
+        slideEls[bgSlideIndex].classList.add('active');
+      }, 6000);
+    }
   }
 
   /** A stay's own contact details, falling back to the website's. */

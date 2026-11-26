@@ -527,6 +527,52 @@
     const phone = text(c.phone, { placeholder: '+91 …' });
     const whatsapp = text(c.whatsapp, { placeholder: '+91 …' });
     const email = text(c.email);
+
+    // Background Images manager (multiple images transition seamlessly)
+    let bgImages = clone(Array.isArray(settings.backgroundImages) ? settings.backgroundImages : []);
+    const bgBox = h('div', { style: 'margin-bottom:20px;' });
+    const bgFileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none' });
+    bgFileInput.onchange = async () => {
+      const files = Array.from(bgFileInput.files || []);
+      if (!files.length) return;
+      showToast(`Uploading ${files.length} background image${files.length > 1 ? 's' : ''}…`);
+      for (const file of files) {
+        try {
+          const url = await uploadImage(file);
+          bgImages.push(url);
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      }
+      bgFileInput.value = '';
+      renderBgImages();
+    };
+
+    const renderBgImages = () => {
+      bgBox.innerHTML = '';
+      const grid = h('div', { class: 'ax-photo-grid', style: 'margin-bottom:12px;' });
+      if (!bgImages.length) {
+        grid.appendChild(h('div', { class: 'empty-state', style: 'grid-column:1/-1; padding:16px; text-align:center;' }, 'No custom background photos yet (using default villa background). Upload 1, 2, 3 or more images for a seamless slideshow!'));
+      } else {
+        bgImages.forEach((img, i) => {
+          const thumb = h('div', { class: 'ax-photo' },
+            h('img', { src: imgSrc(img), alt: `Background ${i + 1}` }),
+            h('div', { class: 'ax-photo-actions' },
+              h('span', { style: 'font-size:11px; color:#fff; padding:2px 6px;' }, `#${i + 1}`),
+              h('button', { type: 'button', title: 'Delete image', onclick: () => { bgImages.splice(i, 1); renderBgImages(); } }, '✕')
+            )
+          );
+          grid.appendChild(thumb);
+        });
+      }
+      bgBox.appendChild(grid);
+      bgBox.appendChild(h('div', { style: 'display:flex; gap:10px; align-items:center;' },
+        h('button', { type: 'button', class: 'btn-delete', onclick: () => bgFileInput.click() }, '⤒ Upload background photos'),
+        bgImages.length ? h('button', { type: 'button', class: 'btn-delete', onclick: () => { if (confirm('Reset to default background?')) { bgImages = []; renderBgImages(); } } }, '↺ Reset to default') : null
+      ));
+    };
+    renderBgImages();
+
     let themes = clone(settings.festiveThemes || []);
     const themesBox = h('div');
     const NAMES = { christmas: 'Christmas', diwali: 'Diwali', pongal: 'Pongal', newyear: 'New Year' };
@@ -551,15 +597,21 @@
       try {
         await api('/api/admin/site-settings', 'PUT', {
           contact: { phone: phone.value.trim(), whatsapp: whatsapp.value.trim(), email: email.value.trim() },
+          backgroundImages: bgImages,
           festiveThemes: themes
         });
         showToast('Website settings saved');
       } catch (err) { showToast(err.message, 'error'); }
     } }, '💾  Save website settings');
     host.append(
+      h('div', { class: 'card-title', style: 'margin:8px 0 8px' }, '🖼️ Background Images (Seamless Rotating Canvas)'),
+      h('div', { class: 'ax-hint', style: 'margin-bottom:12px' }, 'Upload your own background images from admin. If you upload 3 or more images, the website will seamlessly and smoothly cross-fade between them in the background.'),
+      bgFileInput,
+      bgBox,
+      h('div', { class: 'card-title', style: 'margin:24px 0 8px' }, '📞 Contact details'),
       h('div', { class: 'ax-hint', style: 'margin-bottom:12px' }, 'The number guests call and message. A stay uses these unless it has its own number.'),
       h('div', { class: 'ax-grid3' }, field('Phone', phone), field('WhatsApp', whatsapp), field('Email', email)),
-      h('div', { class: 'card-title', style: 'margin:24px 0 8px' }, 'Festive themes'),
+      h('div', { class: 'card-title', style: 'margin:24px 0 8px' }, '🎉 Festive themes'),
       h('div', { class: 'ax-hint', style: 'margin-bottom:12px' }, 'Set these up in advance. The website switches the theme on and off by itself on these dates (India time).'),
       themesBox, save);
   }

@@ -374,8 +374,11 @@ const staySchema = z.object({
   })).max(10).optional().default([])
 });
 
+const imagePath = z.string().max(300).regex(/^(\/api\/images\/[\w.-]+|\/?assets\/[\w./-]+|\/uploads\/[\w.-]+|https?:\/\/[^\s"'<>()]+)$/, 'Invalid image address');
+
 const settingsSchema = z.object({
   contact: z.object({ phone: shortText(30), whatsapp: shortText(30), email: shortText(100) }).optional(),
+  backgroundImages: z.array(imagePath).max(10).optional().default([]),
   festiveThemes: z.array(z.object({
     id: z.string().max(40).optional(),
     theme: z.enum(Rules.FESTIVE_THEMES),
@@ -492,7 +495,7 @@ app.get('/api/homestays', async (req, res) => {
   }
 });
 
-// GET /api/site-settings – public contact details and today's festive theme.
+// GET /api/site-settings – public contact details, background images, and today's festive theme.
 // The theme is picked here on the server from the admin's schedule.
 app.get('/api/site-settings', async (req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
@@ -500,10 +503,11 @@ app.get('/api/site-settings', async (req, res) => {
     const settings = await getBlob('SETTINGS_FILE');
     res.json({
       contact: settings.contact || {},
+      backgroundImages: Array.isArray(settings.backgroundImages) ? settings.backgroundImages : [],
       festiveTheme: Rules.activeFestiveTheme(settings.festiveThemes, todayInIndia())
     });
   } catch (err) {
-    res.json({ contact: {}, festiveTheme: null });
+    res.json({ contact: {}, backgroundImages: [], festiveTheme: null });
   }
 });
 
@@ -1409,6 +1413,7 @@ app.put('/api/admin/site-settings', authMiddleware, async (req, res) => {
   if (bad) return res.status(400).json({ error: 'A festive theme ends before it starts.' });
   const settings = await getBlob('SETTINGS_FILE');
   if (parsed.data.contact) settings.contact = parsed.data.contact;
+  if (Array.isArray(parsed.data.backgroundImages)) settings.backgroundImages = parsed.data.backgroundImages;
   if (parsed.data.festiveThemes) {
     settings.festiveThemes = parsed.data.festiveThemes.map(t => ({ ...t, id: t.id || 'theme-' + randomUUID().slice(0, 8) }));
   }
