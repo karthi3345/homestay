@@ -1758,7 +1758,14 @@ document.addEventListener('DOMContentLoaded', () => {
       siteSettings = { contact: {}, backgroundImages: [], ...settings };
       applySiteSettings();
       const freshStays = Array.isArray(data) ? data : [];
-      if (!freshStays.length) return;
+      const mainLayout = document.querySelector('.viewport-layout');
+      if (!freshStays.length) {
+        homestays = [];
+        try { localStorage.removeItem(CACHE_KEY_HOMESTAYS); } catch (_) {}
+        if (mainLayout) mainLayout.style.display = 'none';
+        return;
+      }
+      if (mainLayout) mainLayout.style.display = '';
 
       try {
         localStorage.setItem(CACHE_KEY_SETTINGS, JSON.stringify(settings));
@@ -1793,13 +1800,20 @@ document.addEventListener('DOMContentLoaded', () => {
         applySiteSettings();
         try { localStorage.setItem(CACHE_KEY_SETTINGS, JSON.stringify(settingsRes)); } catch (_) {}
       }
-      if (Array.isArray(staysRes) && staysRes.length && JSON.stringify(homestays) !== JSON.stringify(staysRes)) {
+      if (Array.isArray(staysRes) && JSON.stringify(homestays) !== JSON.stringify(staysRes)) {
         homestays = staysRes;
-        try { localStorage.setItem(CACHE_KEY_HOMESTAYS, JSON.stringify(staysRes)); } catch (_) {}
-        const currentId = window.selectedStayId || homestays[0]?.id;
-        const activeStay = homestays.find(h => h.id === currentId) || homestays[0];
-        if (activeStay) loadHomestay(activeStay);
-        renderStayChips();
+        const mainLayout = document.querySelector('.viewport-layout');
+        if (!staysRes.length) {
+          try { localStorage.removeItem(CACHE_KEY_HOMESTAYS); } catch (_) {}
+          if (mainLayout) mainLayout.style.display = 'none';
+        } else {
+          if (mainLayout) mainLayout.style.display = '';
+          try { localStorage.setItem(CACHE_KEY_HOMESTAYS, JSON.stringify(staysRes)); } catch (_) {}
+          const currentId = window.selectedStayId || homestays[0]?.id;
+          const activeStay = homestays.find(h => h.id === currentId) || homestays[0];
+          if (activeStay) loadHomestay(activeStay);
+          renderStayChips();
+        }
       }
     } catch (_) {}
   }
