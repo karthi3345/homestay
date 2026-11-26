@@ -1639,6 +1639,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Clickable chips under the map (also the fallback if the map can't load). */
   function renderStayChips() {
+    const publishedIds = new Set(homestays.map(h => h.id));
+    document.querySelectorAll('.stay-card[data-id]').forEach(el => {
+      el.style.display = publishedIds.has(el.dataset.id) ? '' : 'none';
+    });
+    document.querySelectorAll('.mf-dock-card[data-stay]').forEach(el => {
+      el.style.display = publishedIds.has(el.dataset.stay) ? '' : 'none';
+    });
+    if (typeof stayMarkers !== 'undefined' && stayMarkers instanceof Map) {
+      stayMarkers.forEach((marker, id) => {
+        const el = marker.getElement && marker.getElement();
+        if (el) el.style.display = publishedIds.has(id) ? '' : 'none';
+      });
+    }
     const list = document.getElementById('staysMapList');
     if (!list) return;
     list.innerHTML = '';
