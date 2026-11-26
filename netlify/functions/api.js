@@ -1652,24 +1652,27 @@ app.get('/admin', async (req, res) => {
     
     /* ── Mobile Responsive ── */
     @media (max-width: 768px) {
-      html, body { overflow-x: hidden; width: 100%; }
-      * { box-sizing: border-box; }
-      header { padding: 14px 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
-      .header-actions { width: 100%; flex-wrap: wrap; gap: 8px; }
-      .logo-divider { display: none; }
-      .container, main, #appContainer { padding: 12px !important; width: 100% !important; max-width: 100% !important; }
-      .card { padding: 16px !important; margin-bottom: 14px !important; border-radius: 12px !important; }
-      .tabs, .tab-bar { display: flex; flex-wrap: wrap; gap: 6px; }
-      .tab-btn { flex: 1 1 auto; text-align: center; padding: 10px 12px; font-size: 13px; }
-      .form-row { grid-template-columns: 1fr !important; gap: 12px; }
-      input, select, textarea { max-width: 100%; font-size: 16px !important; }
-      table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .period-row { flex-direction: column; align-items: flex-start; gap: 12px; }
-      .btn-delete { width: 100%; text-align: center; justify-content: center; }
-      .request-header { flex-direction: column; gap: 6px; }
-      .request-actions { flex-direction: column; }
-      .request-actions > * { width: 100%; text-align: center; justify-content: center; }
-      .split-card { flex-direction: column; gap: 20px !important; }
+      html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; }
+      * { box-sizing: border-box !important; }
+      header { padding: 14px 16px !important; flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+      header > div, .header-actions { width: 100% !important; display: flex !important; flex-wrap: wrap !important; gap: 8px !important; justify-content: flex-start !important; }
+      .logo-divider { display: none !important; }
+      .container, main, #appContainer { padding: 12px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+      .card, .panel, section { padding: 16px 14px !important; margin-bottom: 14px !important; border-radius: 14px !important; width: 100% !important; max-width: 100% !important; }
+      .tabs, .tab-bar { display: flex !important; flex-wrap: wrap !important; gap: 6px !important; width: 100% !important; }
+      .tab-btn { flex: 1 1 45% !important; text-align: center !important; padding: 10px 8px !important; font-size: 13px !important; min-height: 42px !important; }
+      .form-row, .grid, .grid-2, .grid-3, .form-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; width: 100% !important; }
+      .card > div, .panel > div { max-width: 100% !important; }
+      input, select, textarea { width: 100% !important; max-width: 100% !important; font-size: 16px !important; min-height: 44px !important; }
+      button, .btn { min-height: 42px !important; font-size: 14px !important; }
+      img { max-width: 100% !important; height: auto !important; }
+      table { display: block !important; width: 100% !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+      .period-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+      .btn-delete { width: 100% !important; text-align: center !important; justify-content: center !important; }
+      .request-header { flex-direction: column !important; gap: 6px !important; }
+      .request-actions { flex-direction: column !important; gap: 8px !important; }
+      .request-actions > * { width: 100% !important; text-align: center !important; justify-content: center !important; }
+      .split-card { flex-direction: column !important; gap: 16px !important; }
       .split-card > div { width: 100% !important; }
       .login-card { padding: 24px 18px !important; width: 92% !important; }
     }
