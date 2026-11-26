@@ -1780,6 +1780,32 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     .catch(err => console.error("Error loading homestay data:", err));
 
+  // Auto-sync live admin changes (pricing, settings, stays) every 15s and on tab focus
+  async function syncLiveUpdates() {
+    if (document.hidden) return;
+    try {
+      const [settingsRes, staysRes] = await Promise.all([
+        fetch('/api/site-settings', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+        fetch('/api/homestays', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      ]);
+      if (settingsRes && JSON.stringify(siteSettings) !== JSON.stringify({ contact: {}, backgroundImages: [], ...settingsRes })) {
+        siteSettings = { contact: {}, backgroundImages: [], ...settingsRes };
+        applySiteSettings();
+        try { localStorage.setItem(CACHE_KEY_SETTINGS, JSON.stringify(settingsRes)); } catch (_) {}
+      }
+      if (Array.isArray(staysRes) && staysRes.length && JSON.stringify(homestays) !== JSON.stringify(staysRes)) {
+        homestays = staysRes;
+        try { localStorage.setItem(CACHE_KEY_HOMESTAYS, JSON.stringify(staysRes)); } catch (_) {}
+        const currentId = window.selectedStayId || homestays[0]?.id;
+        const activeStay = homestays.find(h => h.id === currentId) || homestays[0];
+        if (activeStay) loadHomestay(activeStay);
+        renderStayChips();
+      }
+    } catch (_) {}
+  }
+  setInterval(syncLiveUpdates, 15000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncLiveUpdates(); });
+
   function applySiteSettings() {
     const phone = siteSettings.contact?.phone;
     const headerContact = document.getElementById('headerContact');
