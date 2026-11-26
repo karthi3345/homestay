@@ -228,7 +228,8 @@ app.use(helmet({
 
 // CORS Configuration
 const allowedOrigins = [
-  'https://volgohomestay.netlify.app'
+  'https://volgohomestay.netlify.app',
+  'https://homestay-silk.vercel.app'
 ];
 app.use(cors({
   origin: (origin, callback) => {
@@ -242,9 +243,9 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    // Allow custom domains and their subdomains (like www.volgo-stays.com)
+    // Allow custom domains, subdomains, and Vercel preview/production domains
     const host = trimmed.replace(/^https?:\/\//, '');
-    if (host.endsWith('volgo-stays.com') || host.endsWith('volgohomestay.in')) {
+    if (host.endsWith('volgo-stays.com') || host.endsWith('volgohomestay.in') || host.endsWith('.vercel.app')) {
       callback(null, true);
       return;
     }
