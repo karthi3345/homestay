@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const tourStops = [
       {
-        name: 'Heritage Town — Volgo Alpine Retreat',
+        name: 'Heritage Town — Volgo White Town Stay',
         stayId: 'volgo-homestay-first',
         center: [79.8298, 11.9348],
         zoom: 15.0,
@@ -511,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
     {
       id: 'volgo-homestay-first',
       pin: 'heritage',
-      name: 'Volgo Alpine Retreat',
+      name: 'Volgo White Town Stay',
       areaName: 'Heritage Town',
       price: '2,700',
       thumb: 'assets/images/volgo_1.webp',
