@@ -4113,8 +4113,12 @@ body.map-fullscreen-active #floatingWhatsappBtn {
   .stays-map-frame {
     height: 310px !important;
   }
+  .stay-cards {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
   .stay-card {
-    flex: 0 0 84% !important;
+    width: 100% !important;
   }
   .booking-contact-inputs {
     grid-template-columns: 1fr !important;
