@@ -1652,16 +1652,26 @@ app.get('/admin', async (req, res) => {
     
     /* ── Mobile Responsive ── */
     @media (max-width: 768px) {
-      header { padding: 16px 20px; flex-direction: column; align-items: flex-start; gap: 10px; }
+      html, body { overflow-x: hidden; width: 100%; }
+      * { box-sizing: border-box; }
+      header { padding: 14px 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
+      .header-actions { width: 100%; flex-wrap: wrap; gap: 8px; }
       .logo-divider { display: none; }
-      .form-row { grid-template-columns: 1fr; }
+      .container, main, #appContainer { padding: 12px !important; width: 100% !important; max-width: 100% !important; }
+      .card { padding: 16px !important; margin-bottom: 14px !important; border-radius: 12px !important; }
+      .tabs, .tab-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+      .tab-btn { flex: 1 1 auto; text-align: center; padding: 10px 12px; font-size: 13px; }
+      .form-row { grid-template-columns: 1fr !important; gap: 12px; }
+      input, select, textarea { max-width: 100%; font-size: 16px !important; }
+      table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .period-row { flex-direction: column; align-items: flex-start; gap: 12px; }
       .btn-delete { width: 100%; text-align: center; justify-content: center; }
       .request-header { flex-direction: column; gap: 6px; }
       .request-actions { flex-direction: column; }
       .request-actions > * { width: 100%; text-align: center; justify-content: center; }
-      .split-card { flex-direction: column; gap: 24px !important; }
+      .split-card { flex-direction: column; gap: 20px !important; }
       .split-card > div { width: 100% !important; }
+      .login-card { padding: 24px 18px !important; width: 92% !important; }
     }
     /* ── Login Overlay ── */
     #loginOverlay {
