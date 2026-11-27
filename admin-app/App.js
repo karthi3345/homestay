@@ -17,13 +17,17 @@ import * as Device from 'expo-device';
 const ADMIN_URL = 'https://homestay-silk.vercel.app/admin';
 
 // Configure foreground notifications so admin hears and sees notifications while app is open
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (e) {
+  console.warn('Notification handler init skipped:', e);
+}
 
 export default function App() {
   const webViewRef = useRef(null);
@@ -41,21 +45,28 @@ export default function App() {
     });
 
     // Listen for notification tapped by user
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response?.notification?.request?.content?.data;
-      if (webViewRef.current) {
-        // Switch to pending requests view automatically in the admin dashboard
-        webViewRef.current.injectJavaScript(`
-          if (typeof switchAdminTab === 'function') {
-            switchAdminTab('nav-requests');
-          }
-          true;
-        `);
-      }
-    });
+    let responseListener = null;
+    try {
+      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+        if (webViewRef.current) {
+          webViewRef.current.injectJavaScript(`
+            if (typeof switchAdminTab === 'function') {
+              switchAdminTab('nav-requests');
+            }
+            true;
+          `);
+        }
+      });
+    } catch (e) {
+      console.warn('Notification listener error:', e);
+    }
 
     return () => {
-      Notifications.removeNotificationSubscription(responseListener);
+      try {
+        if (responseListener && typeof responseListener.remove === 'function') {
+          responseListener.remove();
+        }
+      } catch (_) {}
     };
   }, []);
 
