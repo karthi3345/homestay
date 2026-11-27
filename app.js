@@ -924,6 +924,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (place) {
           // Do not move or pan the map camera! Keep view completely stable where it is
           showRouteToPlace(catalogStay, place, false);
+          if (window.innerWidth <= 900) {
+            closeStayGlassModal(false);
+            const mapEl = document.querySelector('.stays-map-frame');
+            if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
         }
       });
     });
