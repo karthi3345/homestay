@@ -1827,7 +1827,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           if (mainLayout) mainLayout.style.display = '';
           try { localStorage.setItem(CACHE_KEY_HOMESTAYS, JSON.stringify(staysRes)); } catch (_) {}
-          const currentId = window.selectedStayId || homestays[0]?.id;
+          const currentId = currentHomestay?.id || homestays[0]?.id;
           const activeStay = homestays.find(h => h.id === currentId) || homestays[0];
           if (activeStay) loadHomestay(activeStay);
           renderStayChips();
