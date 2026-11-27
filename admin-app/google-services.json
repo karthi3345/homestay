@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "745866633977",
+    "project_id": "volgohomestay",
+    "storage_bucket": "volgohomestay.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:745866633977:android:8fde38eeda31dc3d8ff828",
+        "android_client_info": {
+          "package_name": "com.volgo.homestay.admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZ7jRgcCiC8GPBo81-ZPnZOYdFH99n6fA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

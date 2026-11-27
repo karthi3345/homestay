@@ -9,6 +9,7 @@
     "userInterfaceStyle": "dark",
     "android": {
       "package": "com.volgo.homestay.admin",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#0f172a"
