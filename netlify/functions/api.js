@@ -145,9 +145,96 @@ function syncFromRepo(liveStays, deletedIds) {
   return changed ? result : null;
 }
 
+// Production-only Supabase Storage persistence (used on Vercel where local disk is ephemeral)
+const IS_VERCEL_PROD = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+const SUPABASE_URL = (process.env.SUPABASE_URL || 'https://fxzaxavtwvnkrsyacpyg.supabase.co').replace(/\/$/, '');
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || '';
+const SUPABASE_BUCKET = 'volgo-data';
+let supabaseBucketReady = false;
+
+function useSupabaseProd() {
+  return IS_VERCEL_PROD && Boolean(SUPABASE_URL && SUPABASE_KEY);
+}
+
+async function ensureSupabaseBucket() {
+  if (supabaseBucketReady) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${SUPABASE_BUCKET}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (res.status === 404 || !res.ok) {
+      await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id: SUPABASE_BUCKET, name: SUPABASE_BUCKET, public: false })
+      });
+    }
+    supabaseBucketReady = true;
+  } catch (e) {
+    console.warn('Supabase bucket check error:', e.message);
+  }
+}
+
+async function supabaseGetJson(filename) {
+  await ensureSupabaseBucket();
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${filename}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+async function supabaseSetJson(filename, data) {
+  await ensureSupabaseBucket();
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${filename}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'x-upsert': 'true'
+    },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`Supabase upload failed for ${filename}:`, res.status, errText);
+  }
+}
+
 async function getBlob(fileKey) {
-  if (memoryCache.has(fileKey)) {
+  if (!useSupabaseProd() && memoryCache.has(fileKey)) {
     return memoryCache.get(fileKey);
+  }
+
+  // Production on Vercel: read from Supabase Storage so all serverless instances share live data
+  if (useSupabaseProd()) {
+    try {
+      let data = await supabaseGetJson(BLOB_FILES[fileKey]);
+      if (data === null) {
+        data = readLocalJson(fileKey, OBJECT_FILES.has(fileKey) ? {} : []);
+        await supabaseSetJson(BLOB_FILES[fileKey], data);
+      }
+      if (fileKey === 'HOMESTAYS_FILE') {
+        const settings = (await supabaseGetJson(BLOB_FILES.SETTINGS_FILE)) || {};
+        const withNew = syncFromRepo(data, settings.deletedStayIds);
+        if (withNew) {
+          data = withNew;
+          await supabaseSetJson(BLOB_FILES[fileKey], data);
+        }
+      }
+      if (fileKey === 'SETTINGS_FILE') {
+        data = { ...readLocalJson('SETTINGS_FILE', {}), ...(data || {}) };
+      }
+      memoryCache.set(fileKey, data);
+      return data;
+    } catch (e) {
+      console.error('Supabase getBlob error for', fileKey, e.message);
+    }
   }
 
   // Fast path: if Netlify Blobs is not configured (e.g. local dev, custom server),
@@ -223,6 +310,14 @@ async function setBlob(fileKey, data) {
     }
   } catch (err) {
     console.error("Local file sync failed:", err.message);
+  }
+
+  if (useSupabaseProd()) {
+    try {
+      await supabaseSetJson(BLOB_FILES[fileKey], data);
+    } catch (e) {
+      console.error('Supabase setBlob error for', fileKey, e.message);
+    }
   }
 
   if (isBlobsConfigured()) {
