@@ -21,6 +21,8 @@ import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import crypto, { randomUUID } from 'crypto';
 import * as Rules from '../../lib/booking-rules.js';
+import * as wp from 'web-push';
+const webpush = wp.default || wp;
 
 if (typeof process.loadEnvFile === 'function' && fs.existsSync(path.join(process.cwd(), '.env'))) {
   try { process.loadEnvFile(path.join(process.cwd(), '.env')); } catch (_) {}
@@ -32,10 +34,9 @@ const BLOB_FILES = {
   PENDING_FILE: 'pending-requests.json',
   HISTORY_FILE: 'booking-history.json',
   EXTERNAL_ICAL_FILE: 'external-icals.json',
-  // The live list of stays. The admin panel edits this copy; data/homestays.json
-  // in the repo is only used to seed it (and to add stays that ship in code).
   HOMESTAYS_FILE: 'homestays.json',
-  SETTINGS_FILE: 'site-settings.json'
+  SETTINGS_FILE: 'site-settings.json',
+  PUSH_SUBSCRIPTIONS_FILE: 'push-subscriptions.json'
 };
 
 const LOCAL_FILES = {
@@ -44,8 +45,39 @@ const LOCAL_FILES = {
   HISTORY_FILE: path.join(process.cwd(), 'data', 'booking-history.json'),
   EXTERNAL_ICAL_FILE: path.join(process.cwd(), 'data', 'external-icals.json'),
   HOMESTAYS_FILE: path.join(process.cwd(), 'data', 'homestays.json'),
-  SETTINGS_FILE: path.join(process.cwd(), 'data', 'site-settings.json')
+  SETTINGS_FILE: path.join(process.cwd(), 'data', 'site-settings.json'),
+  PUSH_SUBSCRIPTIONS_FILE: path.join(process.cwd(), 'data', 'push-subscriptions.json')
 };
+
+// Web Push VAPID Configuration
+const VAPID_FILE = path.join(process.cwd(), 'data', 'vapid-keys.json');
+let vapidKeys = {
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY
+};
+if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf-8'));
+    } else {
+      vapidKeys = webpush.generateVAPIDKeys();
+      fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys, null, 2));
+    }
+  } catch (e) {
+    console.error("VAPID keys initialization error:", e);
+  }
+}
+if (vapidKeys?.publicKey && vapidKeys?.privateKey) {
+  try {
+    webpush.setVapidDetails(
+      'mailto:admin@volgohomestay.com',
+      vapidKeys.publicKey,
+      vapidKeys.privateKey
+    );
+  } catch (e) {
+    console.error("Error setting VAPID details:", e);
+  }
+}
 
 const OBJECT_FILES = new Set(['SETTINGS_FILE']); // stored as {...}, not [...]
 
@@ -501,6 +533,186 @@ app.get('/api/site-settings', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  PUSH NOTIFICATIONS SERVICE (Mobile Expo App & Browser Web Push)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Send real-time push notification to both mobile admin app & browsers
+async function sendBookingPushNotifications(payload) {
+  try {
+    const subscribers = (await getBlob('PUSH_SUBSCRIPTIONS_FILE')) || [];
+    if (!subscribers || !subscribers.length) {
+      console.log("[Push Notification] No devices or browsers registered yet.");
+      return;
+    }
+
+    const title = `🎉 New Booking: ${payload.homestayName || 'Homestay'}`;
+    const amountFormatted = payload.totalAmount ? `₹${Number(payload.totalAmount).toLocaleString('en-IN')}` : '';
+    const body = `${payload.guestName || 'Guest'} (${payload.guestPhone || ''}) booked ${payload.unitsLabel || 'Stay'} for ${amountFormatted} (${payload.checkIn} to ${payload.checkOut})`;
+
+    // 1. Dispatch to Mobile Admin App (Expo Push Notifications)
+    const expoTokens = subscribers
+      .filter(s => s.type === 'expo' && s.token)
+      .map(s => s.token);
+
+    if (expoTokens.length > 0) {
+      const expoMessages = expoTokens.map(token => ({
+        to: token,
+        sound: 'default',
+        channelId: 'booking-alerts',
+        title,
+        body,
+        data: {
+          url: '/admin',
+          id: payload.id,
+          guestName: payload.guestName,
+          homestayName: payload.homestayName,
+          checkIn: payload.checkIn,
+          checkOut: payload.checkOut
+        },
+        priority: 'high',
+        badge: 1
+      }));
+
+      fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expoMessages),
+      }).then(res => res.json())
+        .then(resData => console.log("[Expo Mobile Push] Dispatched successfully:", resData))
+        .catch(err => console.error("[Expo Mobile Push] Send error:", err));
+    }
+
+    // 2. Dispatch to Web Push Subscriptions (Browser Admin)
+    const validSubscribers = [];
+    let pruned = false;
+
+    for (const sub of subscribers) {
+      if (sub.type === 'web' && sub.subscription) {
+        try {
+          await webpush.sendNotification(
+            sub.subscription,
+            JSON.stringify({
+              title,
+              body,
+              icon: '/assets/logo/volg-logo-main.webp',
+              badge: '/assets/logo/volg-logo-main.webp',
+              url: '/admin',
+              id: payload.id
+            })
+          );
+          validSubscribers.push(sub);
+        } catch (err) {
+          console.warn("[Web Push] Delivery note:", err.statusCode || err.message);
+          // 404 or 410 means subscription is expired or unsubscribed
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            pruned = true;
+          } else {
+            validSubscribers.push(sub);
+          }
+        }
+      } else {
+        validSubscribers.push(sub);
+      }
+    }
+
+    if (pruned) {
+      await setBlob('PUSH_SUBSCRIPTIONS_FILE', validSubscribers);
+    }
+  } catch (err) {
+    console.error("[Push Notification] Overall dispatch error:", err);
+  }
+}
+
+// Serve Service Worker for Browser Web Push
+app.get('/sw.js', (req, res) => {
+  const swPath = path.join(process.cwd(), 'public', 'sw.js');
+  if (fs.existsSync(swPath)) {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(swPath);
+  }
+  res.status(404).send('Service worker not found');
+});
+
+// Provide public VAPID key to browser
+app.get('/api/admin/push/vapid-public-key', (req, res) => {
+  res.json({ publicKey: vapidKeys?.publicKey || '' });
+});
+
+// Register Mobile Expo Push Token or Web Push Subscription
+app.post('/api/admin/push/register', async (req, res) => {
+  try {
+    const { type, token, subscription, deviceName, platform } = req.body || {};
+    if (!type || (!token && !subscription)) {
+      return res.status(400).json({ error: 'Invalid push payload' });
+    }
+
+    const list = (await getBlob('PUSH_SUBSCRIPTIONS_FILE')) || [];
+    let updated = false;
+
+    for (const item of list) {
+      if (type === 'expo' && item.type === 'expo' && item.token === token) {
+        item.updatedAt = new Date().toISOString();
+        if (deviceName) item.deviceName = deviceName;
+        if (platform) item.platform = platform;
+        updated = true;
+        break;
+      }
+      if (type === 'web' && item.type === 'web' && item.subscription?.endpoint === subscription?.endpoint) {
+        item.updatedAt = new Date().toISOString();
+        item.subscription = subscription;
+        updated = true;
+        break;
+      }
+    }
+
+    if (!updated) {
+      list.push({
+        id: randomUUID(),
+        type,
+        token: token || null,
+        subscription: subscription || null,
+        deviceName: deviceName || null,
+        platform: platform || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    await setBlob('PUSH_SUBSCRIPTIONS_FILE', list);
+    console.log(`[Push Notification] Registered ${type} subscriber (${list.length} total)`);
+    res.json({ success: true, count: list.length });
+  } catch (err) {
+    console.error("[Push Notification] Registration error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Test trigger for push notification (rings both mobile app and browser)
+app.post('/api/admin/push/test', async (req, res) => {
+  try {
+    await sendBookingPushNotifications({
+      id: 'TEST-' + Date.now(),
+      homestayName: 'VolGO Heritage Villa (Test)',
+      guestName: 'Admin Alert Test',
+      guestPhone: '+91 98765 43210',
+      unitsLabel: 'Whole Homestay',
+      totalAmount: 12500,
+      checkIn: 'Today',
+      checkOut: 'Tomorrow'
+    });
+    res.json({ success: true, message: 'Push notifications dispatched to mobile app and browser.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/request-booking', applyRateLimit, async (req, res) => {
   try {
     const parsed = bookingRequestSchema.safeParse(req.body);
@@ -554,6 +766,11 @@ app.post('/api/request-booking', applyRateLimit, async (req, res) => {
     
     pending.push(payload);
     await setBlob('PENDING_FILE', pending);
+
+    // Instant Real-Time Push Notification to Mobile Admin App & Browsers
+    sendBookingPushNotifications(payload).catch(err => {
+      console.error("[Push Notification] Failed to dispatch booking alert:", err);
+    });
 
     // Fire and forget email notification
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -1488,489 +1705,703 @@ app.get('/admin', async (req, res) => {
   } catch(e) {}
 
   res.send(`<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volgo Homestay — Booking Admin</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fdfbf6',
+              100: '#f9f5e8',
+              200: '#f2e8cc',
+              300: '#ebd7a7',
+              400: '#e0c075',
+              500: '#d6af37',
+              600: '#be962b',
+              700: '#9b7524',
+              800: '#7e5e23',
+              900: '#694e20',
+            },
+            surface: {
+              DEFAULT: '#11131a',
+              card: '#161924',
+              cardHover: '#1c202e',
+              input: '#1d2130',
+              border: 'rgba(255, 255, 255, 0.08)',
+              borderLight: 'rgba(255, 255, 255, 0.15)',
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
   <script>window.homestaysData = ${JSON.stringify(properties).replace(/</g, '\\u003c')};</script>
   <style>
     ${calendarStyles}
     #adminCalendar .selection-summary, #adminCalendar .guest-selector-container { display: none !important; }
     ${adminExtraCss}
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; }
 
     :root {
-      --bg:       #0d0e11;
-      --surface:  #16181d;
-      --border:   rgba(255,255,255,0.08);
-      --accent:   #d6af37;
-      --accent2:  #f0cc60;
-      --text:     #f0f0f0;
-      --muted:    #7a7a8a;
-      --danger:   #e05555;
-      --success:  #4caf87;
-      --radius:   12px;
-      --transition: all 0.25s ease;
+      --bg: #090a0f;
+      --surface: #12141c;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #d6af37;
+      --accent2: #e0c075;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --danger: #ef4444;
+      --success: #10b981;
     }
 
     body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+      background: #090a0f;
+      color: #f4f4f5;
       min-height: 100vh;
-      padding: 0 0 60px;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Header ── */
-    header {
-      background: rgba(22, 24, 29, 0.95);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 40px;
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .admin-logo { height: 40px; width: auto; object-fit: contain; filter: invert(1) opacity(0.85); }
-    .logo-divider { width: 1px; height: 24px; background: var(--border); }
-    .header-title { font-size: 14px; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
-
-    /* ── Layout ── */
-    .container { max-width: 1400px; width: 95%; margin: 0 auto; padding: 40px 24px 0; }
-    
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 24px;
-      align-items: start;
-    }
-    @media (max-width: 900px) {
-      .dashboard-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ── Card ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      margin-bottom: 0; /* Let grid handle gap */
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-    }
-    .card-title {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: var(--accent);
-      font-weight: 600;
-      margin-bottom: 24px;
-      opacity: 0.9;
-    }
-
-    /* ── Pending Requests ── */
-    .request-card {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      margin-bottom: 16px;
-      transition: border-color 0.2s;
-    }
-    .request-card:hover { border-color: rgba(255,255,255,0.15); }
-    .request-header { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; }
-    .request-guest { font-weight: 600; font-size: 16px; color: var(--accent2); }
-    .request-prop { color: var(--muted); font-size: 13px; }
-    .request-dates { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
-    .request-details { font-size: 13px; color: #a0a0a0; margin-bottom: 12px; }
-    .request-note { font-size: 13px; font-style: italic; color: #d0d0d0; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid var(--accent); }
-    .request-actions { display: flex; gap: 12px; }
-    .btn-approve { background: var(--success); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
-    .btn-decline { background: rgba(224,85,85,0.2); color: var(--danger); border: 1px solid var(--danger); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
-    .btn-whatsapp { background: #25d366; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; }
-
-    /* ── Form ── */
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-    .form-row.full { grid-template-columns: 1fr; }
-
-    label {
-      display: block;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
+    /* Form controls custom styling matching Tailwind */
     input[type="date"], input[type="text"], input[type="number"], input[type="password"], select {
       width: 100%;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      font-family: 'Inter', sans-serif;
-      font-size: 15px;
-      padding: 12px 16px;
-      transition: border-color 0.2s;
+      background: rgba(22, 25, 36, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: #f4f4f5;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 14px;
+      transition: all 0.2s ease;
       outline: none;
     }
-    input[type="date"]:focus, input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--accent); }
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
-    select option { background: #1e2028; }
-
-    /* ── Button ── */
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 28px; border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
-    .btn-primary { background: var(--accent); color: #000; width: 100%; justify-content: center; margin-top: 8px; }
-    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
-
-    /* ── Toast ── */
-    #toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 24px; font-size: 14px; opacity: 0; transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 999; pointer-events: none; white-space: nowrap; }
-    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    #toast.success { border-color: var(--success); color: var(--success); }
-    #toast.error   { border-color: var(--danger);  color: var(--danger); }
-
-    /* ── Periods List ── */
-    .periods-list { display: flex; flex-direction: column; gap: 10px; }
-    .period-row { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; transition: border-color 0.2s; }
-    .period-row:hover { border-color: rgba(255,255,255,0.15); }
-    .period-dates { font-size: 15px; font-weight: 500; }
-    .period-duration { font-size: 13px; color: var(--muted); margin-top: 3px; }
-    .period-note { font-size: 12px; color: var(--accent); margin-top: 2px; }
-    .btn-delete { background: transparent; border: 1px solid rgba(224,85,85,0.3); color: var(--danger); border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s; }
-    .btn-delete:hover { background: rgba(224,85,85,0.1); border-color: var(--danger); }
-    .empty-state { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
-    
-    /* ── Mobile Responsive ── */
-    @media (max-width: 768px) {
-      html, body { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; }
-      * { box-sizing: border-box !important; }
-      header { padding: 14px 16px !important; flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
-      header > div, .header-actions { width: 100% !important; display: flex !important; flex-wrap: wrap !important; gap: 8px !important; justify-content: flex-start !important; }
-      .logo-divider { display: none !important; }
-      .container, main, #appContainer { padding: 12px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; }
-      .card, .panel, section { padding: 16px 14px !important; margin-bottom: 14px !important; border-radius: 14px !important; width: 100% !important; max-width: 100% !important; }
-      .tabs, .tab-bar { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; gap: 8px !important; width: 100% !important; padding-bottom: 4px !important; scrollbar-width: none !important; }
-      .tabs::-webkit-scrollbar, .tab-bar::-webkit-scrollbar { display: none !important; }
-      .tab-btn { flex: 0 0 auto !important; white-space: nowrap !important; text-align: center !important; padding: 10px 16px !important; font-size: 13px !important; min-height: 40px !important; border-radius: 10px !important; }
-      .form-row, .grid, .grid-2, .grid-3, .form-grid { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; width: 100% !important; }
-      .card > div, .panel > div { max-width: 100% !important; }
-      input, select, textarea { width: 100% !important; max-width: 100% !important; font-size: 16px !important; min-height: 44px !important; }
-      button, .btn { min-height: 42px !important; font-size: 14px !important; }
-      img { max-width: 100% !important; height: auto !important; }
-      table { display: block !important; width: 100% !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
-      .period-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
-      .btn-delete { width: 100% !important; text-align: center !important; justify-content: center !important; }
-      .request-header { flex-direction: column !important; gap: 6px !important; }
-      .request-actions { flex-direction: column !important; gap: 8px !important; }
-      .request-actions > * { width: 100% !important; text-align: center !important; justify-content: center !important; }
-      .split-card { flex-direction: column !important; gap: 16px !important; }
-      .split-card > div { width: 100% !important; }
-      .login-card { padding: 24px 18px !important; width: 92% !important; }
+    input[type="date"]:focus, input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus {
+      border-color: #d6af37;
+      box-shadow: 0 0 0 2px rgba(214, 175, 55, 0.2);
+      background: rgba(26, 30, 44, 0.95);
     }
-    /* ── Login Overlay ── */
-    #loginOverlay {
-      font-family: 'Inter', sans-serif;
-      color: var(--text);
-    }
-    .login-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 40px;
-      width: 90%;
-      max-width: 400px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-    .login-logo {
-      height: 48px;
-      object-fit: contain;
-      align-self: center;
-      margin-bottom: 8px;
-      filter: invert(1) opacity(0.85);
-    }
-    .login-title {
-      font-size: 18px;
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }
+    select option { background: #161924; color: #f4f4f5; }
+    label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #a1a1aa;
+      margin-bottom: 6px;
       font-weight: 600;
-      text-align: center;
-      color: var(--accent);
-      letter-spacing: 0.5px;
     }
-    .login-input {
-      width: 100%;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      padding: 12px 16px;
-      font-size: 14px;
-      outline: none;
-      transition: var(--transition);
+
+    /* Dynamic period row & request cards */
+    .period-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(22, 25, 36, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
     }
-    .login-input:focus {
-      border-color: var(--accent);
-      background: rgba(255,255,255,0.06);
+    .period-row:hover {
+      border-color: rgba(214, 175, 55, 0.3);
+      background: rgba(22, 25, 36, 0.9);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     }
-    .login-btn {
-      width: 100%;
-      background: var(--accent);
-      color: #0d0e11;
+    .period-dates { font-size: 14.5px; font-weight: 600; color: #f4f4f5; }
+    .period-duration { font-size: 12.5px; color: #a1a1aa; margin-top: 3px; }
+    .period-note { font-size: 12px; color: #d6af37; margin-top: 3px; font-weight: 500; }
+
+    .request-card {
+      background: rgba(22, 25, 36, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s ease;
+    }
+    .request-card:hover {
+      border-color: rgba(214, 175, 55, 0.35);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+    .request-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 10px;
+    }
+    .request-guest { font-weight: 700; font-size: 16px; color: #f4f4f5; }
+    .request-prop {
+      color: #d6af37;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(214, 175, 55, 0.1);
+      border: 1px solid rgba(214, 175, 55, 0.2);
+      padding: 3px 10px;
+      border-radius: 9999px;
+    }
+    .request-dates { font-size: 14.5px; font-weight: 600; color: #f4f4f5; margin-bottom: 6px; }
+    .request-details { font-size: 13px; color: #a1a1aa; margin-bottom: 12px; }
+    .request-note {
+      font-size: 13px;
+      font-style: italic;
+      color: #e4e4e7;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      border-left: 3px solid #d6af37;
+    }
+    .request-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    .btn-approve {
+      background: #059669;
+      color: #fff;
       border: none;
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn-approve:hover { background: #10b981; transform: translateY(-1px); }
+    .btn-decline {
+      background: rgba(239, 68, 68, 0.1);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      padding: 8px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn-decline:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+    .btn-whatsapp {
+      background: #25d366;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn-whatsapp:hover { background: #22c35e; transform: translateY(-1px); }
+    .btn-delete {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      border-radius: 9px;
+      padding: 6px 12px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: var(--transition);
+      transition: all 0.15s;
     }
-    .login-btn:hover {
-      background: var(--accent2);
+    .btn-delete:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fff; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #d6af37, #be962b);
+      color: #090a0f;
+      font-weight: 700;
+      border-radius: 12px;
+      padding: 10px 20px;
+      font-size: 13.5px;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(214, 175, 55, 0.2);
+      transition: all 0.2s ease;
     }
-    .login-error {
-      color: var(--danger);
-      font-size: 13px;
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #e0c075, #d6af37);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(214, 175, 55, 0.3);
+    }
+    .empty-state {
       text-align: center;
-      display: none;
+      padding: 36px 20px;
+      color: #71717a;
+      font-size: 13.5px;
+      font-style: italic;
     }
+
+    #toast {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      background: #161924;
+      border: 1px solid rgba(214, 175, 55, 0.3);
+      border-radius: 14px;
+      padding: 14px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(15px);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 9999;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { border-color: #10b981; color: #34d399; }
+    #toast.error { border-color: #ef4444; color: #f87171; }
   </style>
 </head>
-<body>
+<body class="bg-[#090a0f] text-zinc-100 font-sans min-h-screen">
 
 <!-- Secure Login Panel Overlay -->
-<div id="loginOverlay" style="display: flex; align-items: center; justify-content: center; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 1000;">
-  <div class="login-card">
-    <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="login-logo">
+<div id="loginOverlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090a0f] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(214,175,55,0.18),rgba(255,255,255,0))]">
+  <div class="w-full max-w-md bg-[#12141c]/90 border border-zinc-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl">
+    <div class="flex flex-col items-center text-center mb-7">
+      <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="h-12 w-auto object-contain filter invert opacity-95 mb-3 drop-shadow-[0_0_15px_rgba(214,175,55,0.35)]">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+        Admin Gateway
+      </span>
+    </div>
     
     <!-- Step 1: Username & Password -->
-    <div id="loginCredentialsForm" style="display: flex; flex-direction: column; gap: 16px;">
-      <div class="login-title">Admin Authorization</div>
-      <input type="text" id="adminUserField" placeholder="Username" class="login-input">
-      <input type="password" id="adminPassField" placeholder="Password" class="login-input">
-      <div id="loginErrorMsg" class="login-error"></div>
-      <button onclick="submitAdminCredentials()" class="login-btn">Send MFA Code</button>
+    <div id="loginCredentialsForm" class="space-y-4">
+      <div class="text-sm font-semibold text-zinc-300 text-center">Sign in with administrator credentials</div>
+      <div>
+        <label for="adminUserField">Username</label>
+        <input type="text" id="adminUserField" placeholder="admin" autocomplete="username">
+      </div>
+      <div>
+        <label for="adminPassField">Password</label>
+        <input type="password" id="adminPassField" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div id="loginErrorMsg" class="text-xs text-rose-400 font-medium text-center hidden"></div>
+      <button onclick="submitAdminCredentials()" class="btn-primary w-full py-3 mt-2">
+        Send Verification Code →
+      </button>
     </div>
 
     <!-- Step 2: 6-digit OTP Code -->
-    <div id="loginOtpForm" style="display: none; flex-direction: column; gap: 16px;">
-      <div class="login-title">Enter MFA Code</div>
-      <div style="font-size: 13px; color: var(--muted); text-align: center;">We sent a 6-digit verification code to your email inbox.</div>
-      <input type="text" id="adminOtpField" placeholder="6-digit Code" class="login-input" maxlength="6" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 18px;">
-      <div id="otpErrorMsg" class="login-error"></div>
-      <button onclick="submitMfaOtp()" class="login-btn">Verify & Authorize</button>
-      <button onclick="goBackToLogin()" class="login-btn" style="background: transparent; color: var(--muted); border: 1px solid var(--border);">Back to Login</button>
+    <div id="loginOtpForm" class="space-y-4 hidden">
+      <div class="text-sm font-semibold text-amber-400 text-center">Two-Factor Authentication</div>
+      <div class="text-xs text-zinc-400 text-center">We sent a 6-digit verification code to your email inbox.</div>
+      <div>
+        <label for="adminOtpField" class="text-center">6-Digit Code</label>
+        <input type="text" id="adminOtpField" placeholder="••••••" maxlength="6" class="text-center tracking-[8px] font-bold text-xl">
+      </div>
+      <div id="otpErrorMsg" class="text-xs text-rose-400 font-medium text-center hidden"></div>
+      <button onclick="submitMfaOtp()" class="btn-primary w-full py-3">
+        Verify & Authorize
+      </button>
+      <button onclick="goBackToLogin()" class="w-full py-2.5 rounded-xl border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition-all">
+        Back to Login
+      </button>
     </div>
   </div>
 </div>
 
 <!-- Main Application Wrap -->
-<div id="appContainer" style="display: none;">
+<div id="appContainer" style="display: none;" class="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col lg:flex-row antialiased">
 
-<header style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px;">
-  <div style="display: flex; align-items: center;">
-    <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="admin-logo">
-    <div class="logo-divider"></div>
-    <div class="header-title">Booking Admin — Availability Manager</div>
-  </div>
-  <div style="display: flex; gap: 12px; align-items: center;">
-    <button onclick="testNotificationSystem()" class="btn-delete" style="border-color: var(--accent); color: var(--accent); white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 6px;">
-      🔔 Test Notification & Sound
-    </button>
-    <button onclick="submitAdminLogout()" class="btn-delete" style="border-color: var(--danger); color: var(--danger); white-space: nowrap; height: 38px; display: flex; align-items: center; gap: 6px;">
-      🚪 Logout
-    </button>
-  </div>
-</header>
-
-<div class="container">
-  
-  <!-- System Notifications -->
-  <div class="card" style="margin-bottom: 24px; border: 2px solid var(--danger); display: none;" id="systemNotificationsCard">
-    <div class="card-title" style="color: var(--danger); font-size: 16px; font-weight: bold; margin-bottom: 16px;">System Notifications</div>
-    <div id="systemNotificationsList" style="display: flex; flex-direction: column; gap: 12px;">
-      <!-- Alerts injected here -->
-    </div>
-  </div>
-
-  <!-- MASONRY GRID START -->
-  <div class="dashboard-grid">
-
-    <!-- PENDING REQUESTS -->
-    <div class="card" style="border-top: 2px solid var(--accent); display: flex; flex-direction: column; height: 100%;">
-      <div class="card-title">Pending Booking Requests</div>
-      <div id="pendingList" style="flex: 1; overflow-y: auto; max-height: 400px;">
-        <div class="empty-state">Loading requests...</div>
+  <!-- Desktop & Mobile Sidebar -->
+  <aside class="w-full lg:w-64 bg-[#10121a] border-b lg:border-b-0 lg:border-r border-zinc-800/80 flex flex-col flex-shrink-0 z-30">
+    <!-- Brand Header -->
+    <div class="h-16 px-5 flex items-center justify-between border-b border-zinc-800/80">
+      <div class="flex items-center gap-3">
+        <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="h-7 w-auto object-contain filter invert opacity-90">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">Admin</span>
       </div>
     </div>
 
-    <!-- Property selector (Global Context) -->
-    <div class="card" style="border-left: 4px solid var(--accent);">
-      <div class="card-title">Property Management Context</div>
-      <div class="form-row full">
-        <div>
-          <label>Select Property to Manage</label>
-          <select id="propertySelect" onchange="window.onAdminPropertyChange()">
+    <!-- Navigation Tabs -->
+    <nav class="p-3 space-y-1.5 flex-1 overflow-x-auto lg:overflow-y-auto flex lg:flex-col">
+      <button type="button" id="nav-overview" onclick="switchAdminTab('overview')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 transition-all">
+        <span>📊</span><span>Overview</span>
+      </button>
+      <button type="button" id="nav-requests" onclick="switchAdminTab('requests')" class="flex-shrink-0 lg:w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <div class="flex items-center gap-3">
+          <span>📥</span><span>Pending Requests</span>
+        </div>
+        <span id="pendingBadge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white">0</span>
+      </button>
+      <button type="button" id="nav-stays" onclick="switchAdminTab('stays')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>🏡</span><span>Stay Details</span>
+      </button>
+      <button type="button" id="nav-pricing" onclick="switchAdminTab('pricing')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>💰</span><span>Pricing & Promos</span>
+      </button>
+      <button type="button" id="nav-blocks" onclick="switchAdminTab('blocks')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>📅</span><span>Block Dates</span>
+      </button>
+      <button type="button" id="nav-sync" onclick="switchAdminTab('sync')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>🔄</span><span>iCal Sync</span>
+      </button>
+      <button type="button" id="nav-settings" onclick="switchAdminTab('settings')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>⚙️</span><span>Website Settings</span>
+      </button>
+      <button type="button" id="nav-audit" onclick="switchAdminTab('audit')" class="flex-shrink-0 lg:w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-all">
+        <span>🛡️</span><span>Audit Logs</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Bottom Info -->
+    <div class="hidden lg:block p-4 border-t border-zinc-800/80 space-y-2">
+      <a href="/" target="_blank" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/50 border border-zinc-800 transition-all">
+        <span>👁️ View Live Website</span>
+      </a>
+      <button onclick="submitAdminLogout()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition-all">
+        <span>🚪 Sign Out</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Column -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- Top Bar Header -->
+    <header class="h-16 px-6 bg-[#10121a]/90 backdrop-blur-md border-b border-zinc-800/80 sticky top-0 z-20 flex items-center justify-between gap-4">
+      <div>
+        <h1 id="currentTabTitle" class="text-sm lg:text-base font-bold text-zinc-100 tracking-tight">Executive Dashboard & Overview</h1>
+        <p class="text-[11px] text-zinc-500 hidden sm:block">Volgo Homestay Booking & Availability Operations</p>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="flex items-center gap-3">
+        <!-- Property Switcher -->
+        <div class="flex items-center gap-2 bg-zinc-900 border border-zinc-700/80 rounded-xl px-3 py-1.5 shadow-sm">
+          <label for="propertySelect" class="text-[10.5px] font-bold uppercase tracking-wider text-amber-400 m-0">Stay:</label>
+          <select id="propertySelect" onchange="window.onAdminPropertyChange()" class="bg-transparent text-xs font-semibold text-zinc-100 outline-none cursor-pointer pr-2 border-0 p-0">
             ${propertyOptions}
           </select>
         </div>
-      </div>
-      <button type="button" id="addStayBtn" class="btn-delete ax-add" style="width:100%;">＋ Add a new stay</button>
-    </div>
 
-  <!-- Stay editor: everything the website shows for the selected stay -->
-  <div class="card" id="stayEditorCard" style="grid-column: span 2;">
-    <div class="card-title">Stay Details — what guests see on the website</div>
-    <div id="stayEditor"><div class="empty-state">Loading…</div></div>
-  </div>
-
-  <!-- Pricing Settings -->
-  <div class="card" id="pricingSettingsCard">
-    <div class="card-title">Pricing Settings</div>
-    <div class="form-row">
-      <div>
-        <label>Weekday Price (per night)</label>
-        <input type="number" id="weekdayPrice" placeholder="e.g. 5000">
-      </div>
-      <div>
-        <label>Weekend Price (Fri & Sat night)</label>
-        <input type="number" id="weekendPrice" placeholder="e.g. 6500">
-      </div>
-    </div>
-    <div style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">
-      <div class="card-title" style="margin-bottom: 12px;">Active Promo Codes</div>
-      <div class="form-row" style="margin-bottom: 12px;">
-        <div>
-          <label>New Promo Code</label>
-          <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20" style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
-        </div>
-        <div>
-          <label>Discount (%)</label>
-          <input type="number" id="newPromoDiscount" placeholder="e.g. 20">
-        </div>
-      </div>
-      <div class="form-row" style="align-items: flex-end; margin-bottom: 16px;">
-        <div>
-          <label>Active From</label>
-          <input type="date" id="newPromoFrom">
-        </div>
-        <div>
-          <label>Active To</label>
-          <input type="date" id="newPromoTo">
-        </div>
-        <div>
-          <button class="btn btn-primary" onclick="addPromo()" style="width: 100%; height: 42px; margin-top: 0;">⊕ Add</button>
-        </div>
-      </div>
-      <div id="promoListContainer" class="periods-list">
-        <!-- Rendered dynamically -->
-      </div>
-    </div>
-    <div id="pricingExtras"></div>
-    
-    <button class="btn btn-primary" onclick="updatePricing()" style="margin-top: 24px; width: 100%;">
-      💾 &nbsp; Save All Pricing & Promos
-    </button>
-  </div>
-
-  <!-- Block new dates -->
-  <div class="card">
-    <div class="card-title">Manual Block Dates</div>
-    <div class="form-row">
-      <div>
-        <label>Check-in Date</label>
-        <input type="date" id="fromDate">
-      </div>
-      <div>
-        <label>Check-out Date</label>
-        <input type="date" id="toDate">
-      </div>
-    </div>
-    <div id="blockUnitsBlock"></div>
-    <div class="form-row full">
-      <div>
-        <label>Note (optional — for your reference only)</label>
-        <input type="text" id="noteInput" placeholder="e.g. Family from Chennai, 3 nights">
-      </div>
-    </div>
-    <button class="btn btn-primary" onclick="addPeriod()">
-      ⊕ &nbsp; Block These Dates
-    </button>
-  </div>
-
-  <!-- External Calendar Sync -->
-  <div class="card">
-    <details>
-      <summary class="card-title" style="cursor: pointer; margin-bottom: 0;">
-        External Calendar Sync <span style="font-size:12px; font-weight:normal; color:#888; margin-left: 8px;">(Click to expand)</span>
-      </summary>
-      <div style="margin-top: 20px;">
-        <div class="form-row">
-          <div style="flex:1">
-            <label>Platform Name</label>
-            <input type="text" id="feedName" placeholder="e.g. Airbnb">
-          </div>
-          <div style="flex:2">
-            <label>iCal URL</label>
-            <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="addExternalIcal()">
-          ⊕ &nbsp; Add Calendar
+        <!-- Add Stay Button -->
+        <button type="button" id="addStayBtn" class="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 whitespace-nowrap">
+          <span>＋ Add Stay</span>
         </button>
 
-        <div style="margin-top:24px;">
-          <label>Configured Calendars (Auto-sync every 15 mins)</label>
-          <div id="feedsList" class="periods-list">
-            <div class="empty-state">Loading...</div>
+        <!-- Test Alert Sound -->
+        <button onclick="testNotificationSystem()" title="Test Alert Bell & Sound" class="p-2 rounded-xl text-zinc-400 hover:text-amber-400 hover:bg-zinc-800/80 border border-zinc-800 transition-all">
+          🔔
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Tab Containers -->
+    <main class="flex-1 p-4 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+
+      <!-- System Notifications Alert Banner -->
+      <div id="systemNotificationsCard" class="hidden p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-2">
+        <div class="flex items-center gap-2 font-bold text-sm text-rose-400">
+          <span>⚠️ System Warnings</span>
+        </div>
+        <div id="systemNotificationsList" class="space-y-2 text-xs"></div>
+      </div>
+
+      <!-- VIEW: OVERVIEW -->
+      <div id="view-overview" class="space-y-6">
+        <!-- 4 KPI Stat Widgets -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+            <div class="flex items-center justify-between text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span>Managed Stays</span>
+              <span class="text-base">🏡</span>
+            </div>
+            <div id="statStaysCount" class="text-2xl lg:text-3xl font-extrabold text-zinc-100">${properties.length}</div>
+            <div class="text-[11px] text-zinc-500 mt-1">Active property inventory</div>
+          </div>
+
+          <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden cursor-pointer hover:border-amber-500/30 transition-all" onclick="switchAdminTab('requests')">
+            <div class="flex items-center justify-between text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span>Pending Requests</span>
+              <span class="text-base">📥</span>
+            </div>
+            <div id="statPendingCount" class="text-2xl lg:text-3xl font-extrabold text-amber-400">0</div>
+            <div class="text-[11px] text-amber-500/80 mt-1">Awaiting approval / contact</div>
+          </div>
+
+          <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden cursor-pointer hover:border-zinc-700 transition-all" onclick="switchAdminTab('blocks')">
+            <div class="flex items-center justify-between text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span>Blocked Dates</span>
+              <span class="text-base">📅</span>
+            </div>
+            <div id="statPeriodsCount" class="text-2xl lg:text-3xl font-extrabold text-zinc-100">0</div>
+            <div class="text-[11px] text-zinc-500 mt-1">Manual & booked ranges</div>
+          </div>
+
+          <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-5 shadow-lg relative overflow-hidden cursor-pointer hover:border-zinc-700 transition-all" onclick="switchAdminTab('sync')">
+            <div class="flex items-center justify-between text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2">
+              <span>Sync Feeds</span>
+              <span class="text-base">🔄</span>
+            </div>
+            <div id="statFeedsCount" class="text-2xl lg:text-3xl font-extrabold text-emerald-400">0</div>
+            <div class="text-[11px] text-zinc-500 mt-1">iCal channels connected</div>
+          </div>
+        </div>
+
+        <!-- 2-Column Overview Workspace -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          <!-- Left: Recent Pending Requests -->
+          <div class="lg:col-span-2 bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-5">
+              <div>
+                <h2 class="text-sm font-bold uppercase tracking-wider text-amber-400">Booking Inquiries</h2>
+                <p class="text-xs text-zinc-500">Guests requesting stay reservations</p>
+              </div>
+              <button onclick="switchAdminTab('requests')" class="text-xs font-semibold text-amber-400 hover:text-amber-300">
+                View All →
+              </button>
+            </div>
+            <div id="pendingListOverview">
+              <div class="empty-state">Loading booking inquiries...</div>
+            </div>
+          </div>
+
+          <!-- Right: Visual Calendar Host -->
+          <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-amber-400">Availability Map</h2>
+              <button onclick="switchAdminTab('blocks')" class="text-xs font-semibold text-zinc-400 hover:text-zinc-200">
+                Manage Blocks →
+              </button>
+            </div>
+            <div id="adminCalendarOverviewHost" class="overflow-hidden flex justify-center">
+              <div id="adminCalendar"></div>
+            </div>
           </div>
         </div>
       </div>
-    </details>
-  </div>
 
-  <!-- Website settings -->
-  <div class="card" style="grid-column: span 2;">
-    <div class="card-title">Website Settings — contact number & background images</div>
-    <div id="siteSettingsBody"><div class="empty-state">Loading…</div></div>
-  </div>
-
-  <!-- Security Audit Logs -->
-  <div class="card" style="grid-column: span 2; border-top: 2px solid var(--accent); display: flex; flex-direction: column;">
-    <div class="card-title">Security & Action Audit Logs</div>
-    <div id="auditLogList" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px;">
-      <div class="empty-state">Loading audit logs...</div>
-    </div>
-  </div>
-
-  <!-- Current Blocking -->
-  <div class="card split-card" style="display:flex; gap: 40px; align-items:flex-start;">
-    <div style="flex: 1;">
-      <h2 class="card-title">Currently Blocked Periods</h2>
-      <div id="periodsList">
-        <div class="empty-state">Loading...</div>
+      <!-- VIEW: REQUESTS -->
+      <div id="view-requests" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h2 class="text-base font-bold text-zinc-100">All Pending Booking Requests</h2>
+              <p class="text-xs text-zinc-400">Review guest details, verify dates, contact via WhatsApp or approve instantly.</p>
+            </div>
+          </div>
+          <div id="pendingList">
+            <div class="empty-state">Loading requests...</div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div style="width: 320px;">
-      <h2 class="card-title">Visual Calendar</h2>
-      <div id="adminCalendar"></div>
-    </div>
-  </div>
-  </div>
-  <!-- MASONRY GRID END -->
 
-</div> <!-- container END -->
-</div> <!-- appContainer END -->
+      <!-- VIEW: STAYS -->
+      <div id="view-stays" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl" id="stayEditorCard">
+          <div class="flex items-center justify-between mb-6 border-b border-zinc-800/80 pb-4">
+            <div>
+              <h2 class="text-base font-bold text-zinc-100">Stay Details & Website Presentation</h2>
+              <p class="text-xs text-zinc-400">Edit titles, description, bedrooms, amenities, and photo galleries.</p>
+            </div>
+          </div>
+          <div id="stayEditor">
+            <div class="empty-state">Loading stay details...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: PRICING -->
+      <div id="view-pricing" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl" id="pricingSettingsCard">
+          <div class="border-b border-zinc-800/80 pb-4 mb-6">
+            <h2 class="text-base font-bold text-zinc-100">Pricing Settings & Rates</h2>
+            <p class="text-xs text-zinc-400">Base night rates, weekend surcharges, promo discount codes, and room breakdown.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            <div>
+              <label for="weekdayPrice">Weekday Price (per night)</label>
+              <input type="number" id="weekdayPrice" placeholder="e.g. 5000">
+            </div>
+            <div>
+              <label for="weekendPrice">Weekend Price (Fri & Sat night)</label>
+              <input type="number" id="weekendPrice" placeholder="e.g. 6500">
+            </div>
+          </div>
+
+          <!-- Active Promo Codes -->
+          <div class="border-t border-zinc-800/80 pt-6 mb-6">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-4">Active Promo Codes</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label for="newPromoCode">New Promo Code</label>
+                <input type="text" id="newPromoCode" placeholder="e.g. SUMMER20" class="uppercase" oninput="this.value = this.value.toUpperCase()">
+              </div>
+              <div>
+                <label for="newPromoDiscount">Discount Percentage (%)</label>
+                <input type="number" id="newPromoDiscount" placeholder="e.g. 20">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
+              <div>
+                <label for="newPromoFrom">Active From</label>
+                <input type="date" id="newPromoFrom">
+              </div>
+              <div>
+                <label for="newPromoTo">Active To</label>
+                <input type="date" id="newPromoTo">
+              </div>
+              <div>
+                <button class="btn-primary w-full h-[42px]" onclick="addPromo()">⊕ Add Promo</button>
+              </div>
+            </div>
+            <div id="promoListContainer" class="space-y-2 mt-4">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <div id="pricingExtras" class="border-t border-zinc-800/80 pt-4"></div>
+
+          <button class="btn-primary w-full py-3 mt-6 text-sm" onclick="updatePricing()">
+            💾 Save All Pricing & Promos
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW: BLOCKS & CALENDAR -->
+      <div id="view-blocks" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <!-- Manual Block Form -->
+          <div class="lg:col-span-5 bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="border-b border-zinc-800/80 pb-3">
+              <h2 class="text-base font-bold text-zinc-100">Manual Date Blocking</h2>
+              <p class="text-xs text-zinc-400">Lock dates for direct booking, renovation, or offline reservations.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="fromDate">Check-in Date</label>
+                <input type="date" id="fromDate">
+              </div>
+              <div>
+                <label for="toDate">Check-out Date</label>
+                <input type="date" id="toDate">
+              </div>
+            </div>
+            <div id="blockUnitsBlock"></div>
+            <div>
+              <label for="noteInput">Note (optional reference)</label>
+              <input type="text" id="noteInput" placeholder="e.g. Family from Chennai, 3 nights">
+            </div>
+            <button class="btn-primary w-full py-3 text-sm" onclick="addPeriod()">
+              ⊕ Block These Dates
+            </button>
+          </div>
+
+          <!-- Currently Blocked List -->
+          <div class="lg:col-span-7 bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+            <div class="border-b border-zinc-800/80 pb-3 flex items-center justify-between">
+              <div>
+                <h2 class="text-base font-bold text-zinc-100">Currently Blocked Periods</h2>
+                <p class="text-xs text-zinc-400">Active reservation locks on the selected stay.</p>
+              </div>
+            </div>
+            <div id="periodsList">
+              <div class="empty-state">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: SYNC -->
+      <div id="view-sync" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-6">
+          <div class="border-b border-zinc-800/80 pb-4">
+            <h2 class="text-base font-bold text-zinc-100">External Calendar Sync (iCal)</h2>
+            <p class="text-xs text-zinc-400">Connect Airbnb, Vrbo, Booking.com external calendar feeds with two-way auto sync.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+              <label for="feedName">Platform Name</label>
+              <input type="text" id="feedName" placeholder="e.g. Airbnb">
+            </div>
+            <div class="md:col-span-2">
+              <label for="feedUrl">iCal Feed URL</label>
+              <input type="text" id="feedUrl" placeholder="https://www.airbnb.com/calendar/ical/...">
+            </div>
+          </div>
+          <button class="btn-primary" onclick="addExternalIcal()">
+            ⊕ Add & Sync Calendar Feed
+          </button>
+
+          <div class="border-t border-zinc-800/80 pt-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Configured Calendars</h3>
+              <span class="text-xs text-zinc-500">Auto-syncs every 15 minutes</span>
+            </div>
+            <div id="feedsList" class="space-y-2">
+              <div class="empty-state">Loading external feeds...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: SETTINGS -->
+      <div id="view-settings" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="border-b border-zinc-800/80 pb-4">
+            <h2 class="text-base font-bold text-zinc-100">Website Global Settings</h2>
+            <p class="text-xs text-zinc-400">Contact telephone number, WhatsApp lines, and website hero background photography.</p>
+          </div>
+          <div id="siteSettingsBody">
+            <div class="empty-state">Loading settings...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW: AUDIT -->
+      <div id="view-audit" class="hidden space-y-6">
+        <div class="bg-[#12141c] border border-zinc-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="border-b border-zinc-800/80 pb-4 flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-bold text-zinc-100">Security & Action Audit Logs</h2>
+              <p class="text-xs text-zinc-400">Comprehensive audit record of administrator sign-ins, booking approvals, and stay modifications.</p>
+            </div>
+            <button onclick="loadAuditLogs()" class="btn-delete" style="color:var(--text); border-color:var(--border);">
+              🔄 Refresh Logs
+            </button>
+          </div>
+          <div id="auditLogList" class="max-h-[500px] overflow-y-auto space-y-2 pr-2">
+            <div class="empty-state">Loading audit logs...</div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -2013,9 +2444,24 @@ app.get('/admin', async (req, res) => {
     const requests = await res.json();
     pendingDataCache = requests;
     const list = document.getElementById('pendingList');
+    const overviewList = document.getElementById('pendingListOverview');
+    const statPending = document.getElementById('statPendingCount');
+    const pendingBadge = document.getElementById('pendingBadge');
+
+    if (statPending) statPending.textContent = requests.length;
+    if (pendingBadge) {
+      pendingBadge.textContent = requests.length;
+      if (requests.length > 0) {
+        pendingBadge.classList.remove('hidden');
+      } else {
+        pendingBadge.classList.add('hidden');
+      }
+    }
     
     if (!requests.length) {
-      list.innerHTML = '<div class="empty-state">No pending requests right now.</div>';
+      const emptyMsg = '<div class="p-8 text-center text-zinc-500 text-sm">No pending booking inquiries right now.</div>';
+      if (list) list.innerHTML = emptyMsg;
+      if (overviewList) overviewList.innerHTML = emptyMsg;
       return;
     }
     
@@ -2048,6 +2494,7 @@ app.get('/admin', async (req, res) => {
         </div>
       \`;
     }).join('');
+    if (overviewList) overviewList.innerHTML = list.innerHTML;
   }
   
   async function approveRequest(id, btn) {
@@ -2083,6 +2530,8 @@ app.get('/admin', async (req, res) => {
     const res = await fetch('/api/periods/' + pid);
     const periods = await res.json();
     const list = document.getElementById('periodsList');
+    const statPeriods = document.getElementById('statPeriodsCount');
+    if (statPeriods) statPeriods.textContent = periods.length;
 
     if (!periods.length) {
       list.innerHTML = '<div class="empty-state">No dates blocked yet.</div>';
@@ -2189,6 +2638,8 @@ app.get('/admin', async (req, res) => {
     if (!res.ok) { list.innerHTML = '<div class="empty-state">Failed to load</div>'; return; }
     const data = await res.json();
     const feeds = data.feeds || [];
+    const statFeeds = document.getElementById('statFeedsCount');
+    if (statFeeds) statFeeds.textContent = feeds.length;
     
     let warningsHTML = '';
 
@@ -2408,20 +2859,142 @@ app.get('/admin', async (req, res) => {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  TAB NAVIGATION & WORKSPACE SWITCHER
+  // ─────────────────────────────────────────────────────────────────────────────
+  const ADMIN_TABS = {
+    overview: { view: 'view-overview', title: 'Dashboard Overview' },
+    requests: { view: 'view-requests', title: 'Booking Inquiries & Approvals' },
+    stays: { view: 'view-stays', title: 'Homestay Details & Room Specs' },
+    pricing: { view: 'view-pricing', title: 'Seasonal Pricing & Promo Codes' },
+    blocks: { view: 'view-blocks', title: 'Manual Date Blocks' },
+    sync: { view: 'view-sync', title: 'External Calendar Sync (iCal)' },
+    settings: { view: 'view-settings', title: 'Website Brand & Contact Settings' },
+    audit: { view: 'view-audit', title: 'Security Audit & Activity Logs' }
+  };
+
+  function switchAdminTab(tabKey) {
+    const config = ADMIN_TABS[tabKey] || ADMIN_TABS.overview;
+    Object.keys(ADMIN_TABS).forEach(k => {
+      const el = document.getElementById(ADMIN_TABS[k].view);
+      if (el) el.classList.add('hidden');
+      const btn = document.getElementById('nav-' + k);
+      if (btn) {
+        btn.classList.remove('bg-amber-400/10', 'text-amber-400', 'border-amber-400/30');
+        btn.classList.add('text-zinc-400', 'border-transparent');
+      }
+    });
+
+    const activeEl = document.getElementById(config.view);
+    if (activeEl) activeEl.classList.remove('hidden');
+
+    const activeBtn = document.getElementById('nav-' + tabKey);
+    if (activeBtn) {
+      activeBtn.classList.remove('text-zinc-400', 'border-transparent');
+      activeBtn.classList.add('bg-amber-400/10', 'text-amber-400', 'border-amber-400/30');
+    }
+
+    const titleEl = document.getElementById('currentTabTitle');
+    if (titleEl) titleEl.textContent = config.title;
+
+    if (tabKey === 'audit') loadAuditLogs();
+    if (tabKey === 'requests') loadPendingRequests();
+    if (tabKey === 'blocks') loadPeriods();
+  }
+  window.switchAdminTab = switchAdminTab;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  //  PUSH NOTIFICATIONS (Web Push Service Worker & Expo Mobile App Integration)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  async function initPushNotifications() {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        console.log('[Web Push] Service Worker active:', reg.scope);
+        if (Notification.permission === 'granted') {
+          subscribeToWebPush(reg);
+        }
+      } catch (err) {
+        console.warn('[Web Push] Service worker registration error:', err);
+      }
+    }
+  }
+
+  async function subscribeToWebPush(reg) {
+    try {
+      if (!reg && navigator.serviceWorker) reg = await navigator.serviceWorker.ready;
+      if (!reg) return;
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const res = await fetch('/api/admin/push/vapid-public-key');
+        if (!res.ok) return;
+        const { publicKey } = await res.json();
+        if (!publicKey) return;
+
+        const convertedKey = urlBase64ToUint8Array(publicKey);
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey
+        });
+      }
+
+      if (sub) {
+        await fetch('/api/admin/push/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'web', subscription: sub })
+        });
+        console.log('[Web Push] Successfully registered with server!');
+      }
+    } catch (e) {
+      console.warn('[Web Push] Subscription notice:', e);
+    }
+  }
+
+  // Hook for Expo React Native mobile admin app
+  window.registerExpoPushToken = async function(token) {
+    try {
+      await fetch('/api/admin/push/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'expo', token, deviceName: navigator.userAgent })
+      });
+      console.log('[Push] Registered Expo mobile token.');
+    } catch (e) {}
+  };
+
+  // Check if token was injected from mobile webview
+  if (window.__VOLGO_EXPO_PUSH_TOKEN__) {
+    window.registerExpoPushToken(window.__VOLGO_EXPO_PUSH_TOKEN__);
+  }
+
   // Load everything on startup
   function loadAll() {
+    switchAdminTab('overview');
     loadPeriods();
     loadPricing();
     loadExternalIcal();
     loadPendingRequests();
+    initPushNotifications();
     if (window.initAdminExtras) window.initAdminExtras();
     
-    // Start background polling for new requests every 10 seconds only when tab is active
+    // Background polling for new requests every 8 seconds (uninterrupted by background tabs)
     setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        pollForNewRequests();
-      }
-    }, 10000);
+      pollForNewRequests();
+    }, 8000);
   }
 
   // --- Browser Notifications & Audio Alert System ---
@@ -2429,33 +3002,50 @@ app.get('/admin', async (req, res) => {
   let isFirstLoad = true;
   let audioContextUnlocked = false;
 
-  // Request Notification permission automatically
+  // Request Notification permission automatically on interaction
   if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-    Notification.requestPermission();
+    Notification.requestPermission().then(perm => {
+      if (perm === 'granted') initPushNotifications();
+    });
   }
 
-  function testNotificationSystem() {
+  async function testNotificationSystem() {
     playBeep(1);
-    if (!("Notification" in window)) {
-      alert("This browser does not support desktop notifications.");
-      return;
-    }
-    if (Notification.permission === "granted") {
-      new Notification("Test Notification Works!", {
-        body: "Your browser notifications are fully active.",
-        icon: "/assets/logo/volg-logo-main.webp"
-      });
-    } else if (Notification.permission !== "denied") {
-      Notification.requestPermission().then(permission => {
-        if (permission === "granted") {
-          new Notification("Test Notification Works!", {
-            body: "Your browser notifications are fully active.",
-            icon: "/assets/logo/volg-logo-main.webp"
-          });
+    showToast('Triggering push test to mobile app & browser...', 'info');
+
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification("🔔 Push Alerts Active!", {
+          body: "Your mobile app and desktop notifications are fully synced.",
+          icon: "/assets/logo/volg-logo-main.webp"
+        });
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          subscribeToWebPush(reg);
         }
-      });
-    } else {
-      alert("Notifications are blocked. Please click the lock icon in the URL bar to allow notifications.");
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(async permission => {
+          if (permission === "granted") {
+            new Notification("🔔 Push Alerts Active!", {
+              body: "Your mobile app and desktop notifications are fully synced.",
+              icon: "/assets/logo/volg-logo-main.webp"
+            });
+            if ('serviceWorker' in navigator) {
+              const reg = await navigator.serviceWorker.ready;
+              subscribeToWebPush(reg);
+            }
+          }
+        });
+      }
+    }
+
+    // Trigger backend broadcast push to both Mobile App and Browser
+    try {
+      const res = await fetch('/api/admin/push/test', { method: 'POST' });
+      const data = await res.json();
+      showToast(data.message || 'Push alerts dispatched to mobile app & browsers!');
+    } catch(err) {
+      console.error('Push test error:', err);
     }
   }
 
@@ -2506,6 +3096,7 @@ app.get('/admin', async (req, res) => {
   async function pollForNewRequests() {
     try {
       const res = await fetch('/api/pending-requests');
+      if (!res.ok) return;
       const requests = await res.json();
       
       let hasNew = false;
@@ -2517,7 +3108,7 @@ app.get('/admin', async (req, res) => {
             hasNew = true;
             playBeep();
             if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("New Booking Request!", {
+              new Notification("🎉 New Booking Request!", {
                 body: r.guestName + " requested dates for " + r.homestayName + ".",
                 icon: "/assets/logo/volg-logo-main.webp"
               });
@@ -2611,7 +3202,7 @@ app.get('/admin', async (req, res) => {
       } else {
         // Direct authentication without OTP
         document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').style.display = 'block';
+        document.getElementById('appContainer').style.display = '';
         document.getElementById('adminUserField').value = '';
         document.getElementById('adminPassField').value = '';
         loadAll();
@@ -2657,7 +3248,7 @@ app.get('/admin', async (req, res) => {
       
       // Successfully authenticated!
       document.getElementById('loginOverlay').style.display = 'none';
-      document.getElementById('appContainer').style.display = 'block';
+      document.getElementById('appContainer').style.display = '';
       
       // Clear inputs
       document.getElementById('adminUserField').value = '';

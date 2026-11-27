@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "VolGO Stays",
+    "slug": "volgohomestay",
+    "owner": "volgos-team",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.volgo.homestay.admin",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "95c0de83-7af4-46e1-a84b-177b7daa8850"
+      }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}
