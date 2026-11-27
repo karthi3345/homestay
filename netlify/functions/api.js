@@ -2080,7 +2080,7 @@ app.get('/admin', async (req, res) => {
 <body class="bg-[#090a0f] text-zinc-100 font-sans min-h-screen">
 
 <!-- Secure Login Panel Overlay -->
-<div id="loginOverlay" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090a0f] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(214,175,55,0.18),rgba(255,255,255,0))]">
+<div id="loginOverlay" style="display: none;" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#090a0f] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(214,175,55,0.18),rgba(255,255,255,0))]">
   <div class="w-full max-w-md bg-[#12141c]/90 border border-zinc-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl">
     <div class="flex flex-col items-center text-center mb-7">
       <img src="/assets/logo/volg-logo-main.webp" alt="VOLGO" class="h-12 w-auto object-contain filter invert opacity-95 mb-3 drop-shadow-[0_0_15px_rgba(214,175,55,0.35)]">
