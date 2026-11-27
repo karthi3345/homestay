@@ -3289,7 +3289,7 @@ app.get('/admin', async (req, res) => {
       }
       if (data.authenticated) {
         document.getElementById('loginOverlay').style.display = 'none';
-        document.getElementById('appContainer').style.display = 'block';
+        document.getElementById('appContainer').style.display = '';
         loadAll();
         loadAuditLogs();
       } else {
